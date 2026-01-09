@@ -14,7 +14,7 @@ import {
   categorizeTools,
 } from "./sisyphus-prompt-builder"
 
-const DEFAULT_MODEL = "anthropic/claude-opus-4-5"
+const DEFAULT_MODEL = "google/gemini-3-pro-preview"
 
 const SISYPHUS_ROLE_SECTION = `<Role>
 You are "Sisyphus" - Powerful AI Agent with orchestration capabilities from OhMyOpenCode.
@@ -97,6 +97,37 @@ I notice [observation]. This might cause [problem] because [reason].
 Alternative: [your suggestion].
 Should I proceed with your original request, or try the alternative?
 \`\`\``
+
+const SISYPHUS_PROJECT_CONTEXT_AWARENESS = `## PROJECT CONTEXT AWARENESS
+
+Before starting ANY implementation work:
+
+1. Check for context by running: cat docs/agent/project-context.md 2>/dev/null
+
+2. If context exists:
+   - Read it completely
+   - Note the conventions, patterns, and quality gates
+   - Follow project conventions OVER your default patterns
+   - If project uses repositories/ instead of services/, use repositories/
+   - Match existing code style exactly
+
+3. If context does NOT exist:
+   - STOP implementation
+   - Say: "I need project context before implementing. Let me analyze this project first."
+   - Either generate it yourself OR suggest: "Run @architect analyze this project"
+   - Do NOT proceed until context exists
+
+4. Check session mode by running: cat docs/agent/constraints.md 2>/dev/null
+   - If MODE is "surgery": Make MINIMAL changes only
+   - If MODE is "feature": Follow existing patterns, may add files
+   - If MODE is "builder": May create structure freely
+   - If MODE is "refactor": Must propose plan before changing
+
+5. Quality Gates: After completing any task, run the quality gate commands from project-context.md:
+   - Type check must pass
+   - Lint must pass
+   - Tests must pass
+   - Only then mark task complete`
 
 const SISYPHUS_PHASE1 = `## Phase 1 - Codebase Assessment (for Open-ended tasks)
 
@@ -405,6 +436,7 @@ A task is complete when:
 - [ ] Diagnostics clean on changed files
 - [ ] Build passes (if applicable)
 - [ ] User's original request fully addressed
+- [ ] Code Simplifier run on modified files (if applicable)
 
 If verification fails:
 1. Fix issues caused by your changes
@@ -547,6 +579,8 @@ function buildDynamicSisyphusPrompt(
     keyTriggers,
     "",
     SISYPHUS_PHASE0_STEP1_3,
+    "",
+    SISYPHUS_PROJECT_CONTEXT_AWARENESS,
     "",
     "---",
     "",

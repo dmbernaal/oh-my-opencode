@@ -273,38 +273,134 @@ export function generateOmoConfig(installConfig: InstallConfig): Record<string, 
 
   const agents: Record<string, Record<string, unknown>> = {}
 
+  // Sisyphus - Primary orchestrator with rich prompt and skill configuration
+  const sisyphusConfig: Record<string, unknown> = {}
   if (!installConfig.hasClaude) {
-    agents["Sisyphus"] = { model: "opencode/glm-4.7-free" }
+    sisyphusConfig.model = "opencode/glm-4.7-free"
   }
-
-  agents["librarian"] = { model: "opencode/glm-4.7-free" }
-
-  // Gemini models use `antigravity-` prefix for explicit Antigravity quota routing
-  // @see ANTIGRAVITY_PROVIDER_CONFIG comments for rationale
-  if (installConfig.hasGemini) {
-    agents["explore"] = { model: "google/antigravity-gemini-3-flash" }
-  } else if (installConfig.hasClaude && installConfig.isMax20) {
-    agents["explore"] = { model: "anthropic/claude-haiku-4-5" }
-  } else {
-    agents["explore"] = { model: "opencode/glm-4.7-free" }
+  sisyphusConfig.temperature = 0
+  sisyphusConfig.tools = {
+    "skill_frontend-design": false,
+    "skill_documentation": false,
   }
+  sisyphusConfig.prompt_append =
+    "You are the primary orchestrator. Before starting implementation, load relevant skills: 'tdd-workflow' for test-driven development, 'backend-patterns' for API/server work, 'api-design' for endpoints, 'database-design' for data models. Always create TODOs before implementing. Delegate frontend to @frontend-ui-ux-engineer, documentation to @document-writer."
+  sisyphusConfig.description =
+    "Primary orchestrator and backend specialist. Plans obsessively with TODOs, delegates strategically. Handles: API design, database work, business logic, authentication, server-side code. NEVER does frontend - always delegates to @frontend-ui-ux-engineer. Loads skills: tdd-workflow, backend-patterns, api-design, database-design."
+  agents["Sisyphus"] = sisyphusConfig
 
+  // Oracle - Strategic advisor
+  const oracleConfig: Record<string, unknown> = {}
   if (!installConfig.hasChatGPT) {
-    agents["oracle"] = {
-      model: installConfig.hasClaude ? "anthropic/claude-opus-4-5" : "opencode/glm-4.7-free",
-    }
+    oracleConfig.model = installConfig.hasClaude ? "google/gemini-3-pro-preview" : "opencode/glm-4.7-free"
   }
+  oracleConfig.temperature = 0
+  oracleConfig.tools = {
+    "skill_frontend-design": false,
+    "skill_tdd-workflow": false,
+    "skill_documentation": false,
+  }
+  oracleConfig.prompt_append =
+    "You are a strategic advisor. Load 'architecture-design' skill for architecture reviews. Load 'code-review' skill when reviewing implementations. Provide deep analysis, identify risks, suggest improvements."
+  oracleConfig.description =
+    "Strategic technical advisor. Invoke SYNCHRONOUSLY for: architecture decisions, code review, debugging complex issues, security review, choosing between approaches. Loads skills: architecture-design, code-review. Wait for response before proceeding."
+  agents["oracle"] = oracleConfig
 
-  if (installConfig.hasGemini) {
-    agents["frontend-ui-ux-engineer"] = { model: "google/antigravity-gemini-3-pro-high" }
-    agents["document-writer"] = { model: "google/antigravity-gemini-3-flash" }
-    agents["multimodal-looker"] = { model: "google/antigravity-gemini-3-flash" }
-  } else {
-    const fallbackModel = installConfig.hasClaude ? "anthropic/claude-opus-4-5" : "opencode/glm-4.7-free"
-    agents["frontend-ui-ux-engineer"] = { model: fallbackModel }
-    agents["document-writer"] = { model: fallbackModel }
-    agents["multimodal-looker"] = { model: fallbackModel }
+  // Librarian - Research specialist
+  const librarianConfig: Record<string, unknown> = {
+    model: "opencode/glm-4.7-free",
+    temperature: 0,
+    tools: {
+      "skill_frontend-design": false,
+      "skill_tdd-workflow": false,
+      "skill_backend-patterns": false,
+    },
+    prompt_append:
+      "You are a research specialist. Load 'research' skill when investigating problems or technologies. Provide evidence-based answers with sources.",
+    description:
+      "Research specialist. Run in BACKGROUND for parallel research. Use for: documentation lookup, finding implementation examples, GitHub exploration, library evaluation. Loads skill: research.",
   }
+  agents["librarian"] = librarianConfig
+
+  // Explore - Fast codebase exploration
+  const exploreConfig: Record<string, unknown> = {}
+  if (installConfig.hasGemini) {
+    exploreConfig.model = "google/antigravity-gemini-3-flash"
+  } else if (installConfig.hasClaude && installConfig.isMax20) {
+    exploreConfig.model = "anthropic/claude-haiku-4-5"
+  } else {
+    exploreConfig.model = "opencode/glm-4.7-free"
+  }
+  exploreConfig.temperature = 0
+  exploreConfig.tools = { "skill*": false }
+  exploreConfig.description =
+    "Blazing fast codebase exploration. Run in BACKGROUND always. Use for: quick file searches, finding existing implementations, keyword matching. No skills - pure speed."
+  agents["explore"] = exploreConfig
+
+  // Frontend UI/UX Engineer
+  const frontendConfig: Record<string, unknown> = {}
+  if (installConfig.hasGemini) {
+    frontendConfig.model = "google/antigravity-gemini-3-pro-high"
+  } else {
+    const fallbackModel = installConfig.hasClaude ? "google/gemini-3-pro-preview" : "opencode/glm-4.7-free"
+    frontendConfig.model = fallbackModel
+  }
+  frontendConfig.temperature = 0.3
+  frontendConfig.tools = {
+    "skill*": false,
+    "skill_frontend-design": true,
+  }
+  frontendConfig.prompt_append =
+    "You are an elite frontend specialist. ALWAYS load 'frontend-design' skill before starting any UI work. Create distinctive, production-grade interfaces. Avoid generic AI aesthetics."
+  frontendConfig.description =
+    "Elite frontend and UI/UX specialist. Delegate ALL visual work here: React/Vue/Svelte components, CSS/Tailwind, responsive design, animations. ALWAYS loads skill: frontend-design."
+  agents["frontend-ui-ux-engineer"] = frontendConfig
+
+  // Document Writer
+  const documentWriterConfig: Record<string, unknown> = {}
+  if (installConfig.hasGemini) {
+    documentWriterConfig.model = "google/antigravity-gemini-3-flash"
+  } else {
+    const fallbackModel = installConfig.hasClaude ? "google/gemini-3-pro-preview" : "opencode/glm-4.7-free"
+    documentWriterConfig.model = fallbackModel
+  }
+  documentWriterConfig.temperature = 0.2
+  documentWriterConfig.tools = {
+    "skill*": false,
+    "skill_documentation": true,
+  }
+  documentWriterConfig.prompt_append = "You are a technical writing expert. Load 'documentation' skill for all writing tasks."
+  documentWriterConfig.description = "Technical writing expert. Run in BACKGROUND. Use for: README, API docs, code comments. Loads skill: documentation."
+  agents["document-writer"] = documentWriterConfig
+
+  // Multimodal Looker
+  const multimodalConfig: Record<string, unknown> = {}
+  if (installConfig.hasGemini) {
+    multimodalConfig.model = "google/antigravity-gemini-3-flash"
+  } else {
+    const fallbackModel = installConfig.hasClaude ? "google/gemini-3-pro-preview" : "opencode/glm-4.7-free"
+    multimodalConfig.model = fallbackModel
+  }
+  multimodalConfig.temperature = 0
+  multimodalConfig.tools = { "skill*": false }
+  multimodalConfig.description = "Visual content analyst for PDFs, images, diagrams. Run in BACKGROUND. No skills - pure visual analysis."
+  agents["multimodal-looker"] = multimodalConfig
+
+  // Architect - Planning and analysis agent
+  const architectConfig: Record<string, unknown> = {
+    model: "google/gemini-3-pro-preview",
+    temperature: 0,
+    tools: {
+      "skill_frontend-design": false,
+      "skill_tdd-workflow": false,
+      "skill_backend-patterns": false,
+    },
+    prompt_append:
+      "You are in planning/analysis mode. Load skills based on phase: 'project-onboarding' for new projects, 'research' for investigation, 'problem-framing' for requirements, 'prd-creation' for specifications, 'architecture-design' for technical design, 'test-specification' for test planning. Do NOT make code changes.",
+    description:
+      "Planning and analysis agent. Does NOT make changes. Use for: project onboarding, research, PRD creation, architecture design, test specification. Invoke with @architect.",
+  }
+  agents["architect"] = architectConfig
 
   if (Object.keys(agents).length > 0) {
     config.agents = agents

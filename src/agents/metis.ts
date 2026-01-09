@@ -278,7 +278,7 @@ const metisRestrictions = createAgentToolRestrictions([
   "sisyphus_task",
 ])
 
-const DEFAULT_MODEL = "anthropic/claude-opus-4-5"
+const DEFAULT_MODEL = "google/gemini-3-pro-preview"
 
 export function createMetisAgent(model: string = DEFAULT_MODEL): AgentConfig {
   return {

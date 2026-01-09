@@ -29,3 +29,7 @@ export { createPrometheusMdOnlyHook } from "./prometheus-md-only";
 export { createTaskResumeInfoHook } from "./task-resume-info";
 export { createStartWorkHook } from "./start-work";
 export { createSisyphusOrchestratorHook } from "./sisyphus-orchestrator";
+export { createProjectContextEnforcerHook } from "./project-context-enforcer";
+export { createAutoCodeSimplifierHook } from "./auto-code-simplifier";
+
+

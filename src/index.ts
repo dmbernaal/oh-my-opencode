@@ -30,6 +30,8 @@ import {
   createStartWorkHook,
   createSisyphusOrchestratorHook,
   createPrometheusMdOnlyHook,
+  createProjectContextEnforcerHook,
+  createAutoCodeSimplifierHook,
 } from "./hooks";
 import {
   contextCollector,
@@ -204,13 +206,13 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     ? createSisyphusOrchestratorHook(ctx)
     : null;
 
+  const projectContextEnforcer = createProjectContextEnforcerHook(ctx);
+
   const prometheusMdOnly = isHookEnabled("prometheus-md-only")
     ? createPrometheusMdOnlyHook(ctx)
     : null;
 
   const taskResumeInfo = createTaskResumeInfoHook();
-
-  const backgroundManager = new BackgroundManager(ctx);
 
   initTaskToastManager(ctx.client);
 
@@ -315,6 +317,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await claudeCodeHooks["chat.message"]?.(input, output);
       await keywordDetector?.["chat.message"]?.(input, output);
       await contextInjector["chat.message"]?.(input, output);
+      await projectContextEnforcer["chat.message"](input, output);
       await autoSlashCommand?.["chat.message"]?.(input, output);
       await startWork?.["chat.message"]?.(input, output);
 
@@ -407,6 +410,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await interactiveBashSession?.event(input);
       await ralphLoop?.event(input);
       await sisyphusOrchestrator?.handler(input);
+      await autoCodeSimplifier.event(input);
 
       const { event } = input;
       const props = event.properties as Record<string, unknown> | undefined;
@@ -524,6 +528,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await interactiveBashSession?.["tool.execute.after"](input, output);
       await editErrorRecovery?.["tool.execute.after"](input, output);
       await sisyphusOrchestrator?.["tool.execute.after"]?.(input, output);
+      await autoCodeSimplifier["tool.execute.after"](input, output);
       await taskResumeInfo["tool.execute.after"](input, output);
     },
   };
