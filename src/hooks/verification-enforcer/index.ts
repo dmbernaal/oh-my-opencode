@@ -9,6 +9,7 @@ export const createVerificationEnforcerHook = (ctx: { directory: string }): Hook
 
   return {
     "tool.execute.after": async (input: any, output: any) => {
+      console.log('[Verification Enforcer] Hook triggered for tool:', input.tool);
       const toolOutput = JSON.stringify(output);
       recentToolOutputs.push(toolOutput);
 

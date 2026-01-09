@@ -64,24 +64,45 @@ Respond in JSON format:
 }`;
 
   try {
+    console.log('[Intent Gate] Calling Gemini Flash for intent analysis...');
+    console.log('[Intent Gate] User request:', userRequest.substring(0, 100));
+    
     const response = await client.chat.completions.create({
-      model: "google/gemini-3.0-flash",
+      model: "google/gemini-3-flash-preview",
       messages: [
         {
           role: "user",
-          content: analysisPrompt,
+          content: analysisPrompt + "\n\nIMPORTANT: Respond ONLY with valid JSON matching the exact format specified above. Do not include any text before or after the JSON.",
         },
       ],
       temperature: 0,
-      response_format: { type: "json_object" },
     });
+
+    console.log('[Intent Gate] API response received');
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
+      console.error('[Intent Gate] Empty response from model');
+      console.error('[Intent Gate] Response structure:', JSON.stringify(response, null, 2));
       return createFallbackAnalysis(userRequest, threshold);
     }
 
-    const parsed = JSON.parse(content);
+    let jsonContent = content.trim();
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonContent = jsonMatch[0];
+    }
+
+    const parsed = JSON.parse(jsonContent);
+
+    if (typeof parsed.confidence !== 'number') {
+      console.warn('[Intent Gate] Invalid confidence value, using fallback');
+      return createFallbackAnalysis(userRequest, threshold);
+    }
+
+    console.log('[Intent Gate] Confidence score:', parsed.confidence);
+    console.log('[Intent Gate] Threshold:', threshold);
+    console.log('[Intent Gate] Decision:', parsed.confidence >= threshold ? 'PASS' : 'CLARIFY');
 
     return {
       confidence: parsed.confidence || 50,
@@ -92,7 +113,15 @@ Respond in JSON format:
       suggestedQuestions: parsed.suggestedQuestions || [],
     };
   } catch (error) {
-    console.error("Intent analysis failed:", error);
+    console.error("=== Intent Analysis Error ===");
+    console.error("Model:", "google/gemini-3-flash-preview");
+    console.error("Error:", error);
+    console.error("Error type:", error instanceof Error ? error.constructor.name : typeof error);
+    console.error("Error message:", error instanceof Error ? error.message : String(error));
+    if (error instanceof Error && error.stack) {
+      console.error("Stack:", error.stack);
+    }
+    console.error("============================");
     return createFallbackAnalysis(userRequest, threshold);
   }
 }

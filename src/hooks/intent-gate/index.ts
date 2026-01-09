@@ -10,8 +10,11 @@ const MAX_CLARIFICATION_ROUNDS = 3;
 export const createIntentGateHook = (ctx: { directory: string; client: any }): Hooks => {
   return {
     "chat.message": async (input: any, output: any) => {
+      console.log('[Intent Gate] Hook triggered');
+      
       const parts = (output as { parts?: Array<{ type: string; text?: string }> }).parts;
       if (!parts || parts.length === 0) {
+        console.log('[Intent Gate] No parts in output, skipping');
         return;
       }
 
@@ -21,8 +24,11 @@ export const createIntentGateHook = (ctx: { directory: string; client: any }): H
         .join(" ");
 
       if (!userMessage || userMessage.trim().length === 0) {
+        console.log('[Intent Gate] Empty user message, skipping');
         return;
       }
+
+      console.log('[Intent Gate] User message:', userMessage.substring(0, 100));
 
       if (userMessage.toLowerCase().includes("execute the plan") || 
           userMessage.toLowerCase().includes("let's implement") ||

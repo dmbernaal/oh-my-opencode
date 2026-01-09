@@ -22,7 +22,10 @@ export function resetScenarioDetection(): void {
 export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks => {
   return {
     "chat.message": async (input: any, output: any) => {
+      console.log('[Scenario Detector] Hook triggered');
+      
       if (hasDetectedScenario) {
+        console.log('[Scenario Detector] Already detected, skipping');
         return;
       }
 
@@ -55,9 +58,11 @@ export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks =>
       const detectedScenario = detectScenario(userMessage, projectContext);
 
       if (detectedScenario) {
+        console.log('[Scenario Detector] Detected mode:', detectedScenario.mode);
         applyScenario(ctx.directory, detectedScenario);
         hasDetectedScenario = true;
       } else {
+        console.log('[Scenario Detector] No match, using default: feature');
         const defaultScenario = SCENARIOS.find((s) => s.mode === "feature");
         if (defaultScenario) {
           applyScenario(ctx.directory, defaultScenario);
@@ -83,6 +88,8 @@ function analyzeProjectContext(directory: string): { isEmpty: boolean; hasPackag
 }
 
 function applyScenario(directory: string, scenario: any): void {
+  console.log('[Scenario Detector] Applying scenario:', scenario.mode);
+  
   const config: SessionConfiguration = {
     mode: scenario.mode,
     confidenceThreshold: scenario.confidenceThreshold,
@@ -92,6 +99,7 @@ function applyScenario(directory: string, scenario: any): void {
   };
 
   setSessionConfiguration(config);
+  console.log('[Scenario Detector] Session config set:', config);
 
   const constraintsPath = path.join(directory, "docs", "agent", "constraints.md");
   const constraintsDir = path.dirname(constraintsPath);
