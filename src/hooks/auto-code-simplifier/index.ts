@@ -1,4 +1,4 @@
-import type { Hook } from "@opencode-ai/plugin";
+import type { Hooks } from "@opencode-ai/plugin";
 import { getMainSessionID } from "../../features/claude-code-session-state";
 import { createSisyphusTask } from "../../tools";
 import { BackgroundManager } from "../../features/background-agent";
@@ -11,7 +11,7 @@ interface AutoCodeSimplifierOptions {
 export const createAutoCodeSimplifierHook = (
   ctx: { directory: string },
   options: AutoCodeSimplifierOptions
-): Hook => {
+): Hooks => {
   const dirtyFiles = new Set<string>();
   let isSimplifying = false;
 

@@ -37,7 +37,7 @@ IF the file exists:
 You are authorized to:
 
 - Read any file in the project
-- Create files ONLY in docs/agent/ and docs/architecture/
+- Create files ONLY in docs/agent/, docs/session/, and docs/architecture/
 - Run commands to understand the project (ls, cat, grep)
 - Load planning skills: project-onboarding, problem-framing, prd-creation, architecture-design, test-specification, research
 
@@ -48,18 +48,83 @@ You are NOT authorized to:
 - Make implementation decisions without user approval
 - Skip the project context check
 
+## CREATING ACTIVE PLANS
+
+When creating an implementation plan, you MUST write it to \`docs/session/active-plan.md\`.
+
+The file structure is:
+
+\`\`\`markdown
+---
+name: [Feature/Task Name]
+status: planning
+mode: [surgery | feature | builder | refactor]
+created: [ISO timestamp]
+updated: [ISO timestamp]
+verification:
+  typeCheck: pending
+  lint: pending
+  tests: pending
+  build: pending
+---
+
+# Active Plan: [Feature/Task Name]
+
+## Objective
+
+[One paragraph describing what we're building and why]
+
+## Understanding
+
+### What We Know
+- [Confirmed facts about requirements]
+- [Confirmed facts about the codebase]
+
+### What We Assumed
+- [Assumptions made and why they seemed reasonable]
+
+### Open Questions
+- [ ] [Questions that still need answers]
+
+---
+
+## The Plan
+
+### Phase 1: [Phase Name]
+- [ ] Task 1.1: [Description]
+  - Files: [files to create/modify]
+  - Acceptance: [how we know this is done]
+- [ ] Task 1.2: [Description]
+  - Files: [files to create/modify]
+  - Acceptance: [how we know this is done]
+
+### Phase 2: [Phase Name]
+- [ ] Task 2.1: [Description]
+  ...
+
+---
+
+## Progress Log
+
+(This section will be updated as work proceeds)
+\`\`\`
+
+**CRITICAL:** The YAML frontmatter is machine-parseable. The markdown body is human-readable. Both are important.
+
 ## HANDOFF PROTOCOL
 
 When planning is complete, tell the user:
 
 "Planning complete. Documents created:
-- docs/agent/project-context.md
-- docs/agent/constraints.md  
-- [any other docs created]
+- docs/session/active-plan.md (The implementation plan)
+- docs/agent/project-context.md (if new)
+- docs/agent/constraints.md (if new)
 
 To begin implementation:
 1. Return to Sisyphus (Tab key)
-2. Say: 'Execute [task name]' or 'Implement the plan in docs/architecture/[name]-tasks.md'"`
+2. Say: 'Execute the plan' or 'Let's implement this'
+
+Sisyphus will read the active-plan.md and execute it step by step."`
 
 export function createArchitectAgent(model: string = "openai/gpt-5.2"): AgentConfig {
   const restrictions = createAgentToolRestrictions([

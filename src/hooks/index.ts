@@ -31,5 +31,8 @@ export { createStartWorkHook } from "./start-work";
 export { createSisyphusOrchestratorHook } from "./sisyphus-orchestrator";
 export { createProjectContextEnforcerHook } from "./project-context-enforcer";
 export { createAutoCodeSimplifierHook } from "./auto-code-simplifier";
+export { createScenarioDetectorHook, getSessionConfiguration } from "./scenario-detector";
+export { createIntentGateHook } from "./intent-gate";
+export { createVerificationEnforcerHook } from "./verification-enforcer";
 
 

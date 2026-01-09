@@ -123,7 +123,17 @@ Before starting ANY implementation work:
    - If MODE is "builder": May create structure freely
    - If MODE is "refactor": Must propose plan before changing
 
-5. Quality Gates: After completing any task, run the quality gate commands from project-context.md:
+5. **Check for Active Plan:** Run: cat docs/session/active-plan.md 2>/dev/null
+   - If active-plan.md exists:
+     - Read it completely to understand the objective, phases, and current progress
+     - Continue from where the plan left off (look for unchecked tasks)
+     - As you complete tasks, update the plan file (mark tasks done, add progress notes)
+     - Update verification status as you run checks
+   - If no active plan exists and this is a complex task:
+     - Suggest: "This looks like a multi-step task. Should I create a plan with @architect first?"
+     - For simple fixes, proceed without a plan
+
+6. Quality Gates: After completing any task, run the quality gate commands from project-context.md:
    - Type check must pass
    - Lint must pass
    - Tests must pass
