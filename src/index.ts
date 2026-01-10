@@ -356,7 +356,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await contextInjector["chat.message"]?.(input, output);
       await scenarioDetector?.["chat.message"]?.(input, output);
       await intentGate?.["chat.message"]?.(input, output);
-      await projectContextEnforcer["chat.message"](input, output);
+      await projectContextEnforcer?.["chat.message"]?.(input, output);
       await autoSlashCommand?.["chat.message"]?.(input, output);
       await startWork?.["chat.message"]?.(input, output);
 

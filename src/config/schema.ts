@@ -87,6 +87,7 @@ export const HookNameSchema = z.enum([
   "prometheus-md-only",
   "start-work",
   "sisyphus-orchestrator",
+  "project-context-enforcer",
 ])
 
 export const BuiltinCommandNameSchema = z.enum([

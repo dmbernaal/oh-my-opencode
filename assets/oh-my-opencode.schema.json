@@ -80,7 +80,8 @@
           "edit-error-recovery",
           "prometheus-md-only",
           "start-work",
-          "sisyphus-orchestrator"
+          "sisyphus-orchestrator",
+          "project-context-enforcer"
         ]
       }
     },
