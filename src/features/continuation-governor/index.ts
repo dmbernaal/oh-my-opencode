@@ -12,6 +12,8 @@
  * - Multiple hooks racing (single source of truth for continuation decisions)
  */
 
+import { log } from "../../shared/logger"
+
 export interface ContinuationState {
   /** Timestamp of last user-initiated message */
   lastUserMessageTime: number
@@ -85,7 +87,6 @@ function getOrCreateState(sessionID: string): ContinuationState {
  */
 export function initializeContinuationGovernor(customConfig?: Partial<GovernorConfig>): void {
   config = { ...DEFAULT_CONFIG, ...customConfig }
-  console.log("[Continuation Governor] Initialized with config:", config)
 }
 
 /**
@@ -97,67 +98,47 @@ export function requestContinuation(request: ContinuationRequest): ContinuationD
   const state = getOrCreateState(request.sessionID)
   const now = Date.now()
 
-  console.log(`[Continuation Governor] ${request.hookName} requested continuation for session ${request.sessionID}`)
-  console.log(`[Continuation Governor] Reason: ${request.reason}`)
-  console.log(`[Continuation Governor] Current state:`, {
-    consecutiveContinuations: state.consecutiveContinuations,
-    sessionContinuationCount: state.sessionContinuationCount,
-    postSystemOperation: state.postSystemOperation,
-    timeSinceLastContinuation: now - state.lastContinuationTime,
-    timeSinceLastUserMessage: now - state.lastUserMessageTime,
-  })
-
   // Rule 1: Block immediately after system operations (compaction, recovery)
   if (state.postSystemOperation) {
     state.postSystemOperation = false // Clear flag after first block
-    const decision: ContinuationDecision = {
+    return {
       allowed: false,
       blockedReason: "Post-system operation cooldown (compaction/recovery just completed)",
     }
-    console.log(`[Continuation Governor] Decision: BLOCKED - ${decision.blockedReason}`)
-    return decision
   }
 
   // Rule 2: Block if too many consecutive continuations without user input
   if (state.consecutiveContinuations >= config.maxConsecutiveContinuations) {
-    const decision: ContinuationDecision = {
+    return {
       allowed: false,
       blockedReason: `Max consecutive continuations reached (${config.maxConsecutiveContinuations})`,
     }
-    console.log(`[Continuation Governor] Decision: BLOCKED - ${decision.blockedReason}`)
-    return decision
   }
 
   // Rule 3: Block if cooldown period is active
   const timeSinceLastContinuation = now - state.lastContinuationTime
   if (state.lastContinuationTime > 0 && timeSinceLastContinuation < config.cooldownMs) {
-    const decision: ContinuationDecision = {
+    return {
       allowed: false,
       blockedReason: `Cooldown period active (${Math.ceil((config.cooldownMs - timeSinceLastContinuation) / 1000)}s remaining)`,
     }
-    console.log(`[Continuation Governor] Decision: BLOCKED - ${decision.blockedReason}`)
-    return decision
   }
 
   // Rule 4: Block if session appears stale (user hasn't typed recently)
   const timeSinceLastUserMessage = now - state.lastUserMessageTime
   if (timeSinceLastUserMessage > config.staleSessionMs) {
-    const decision: ContinuationDecision = {
+    return {
       allowed: false,
       blockedReason: `Session appears stale (${Math.ceil(timeSinceLastUserMessage / 60000)} minutes since last user message)`,
     }
-    console.log(`[Continuation Governor] Decision: BLOCKED - ${decision.blockedReason}`)
-    return decision
   }
 
   // Rule 5: Block if session budget exhausted
   if (state.sessionContinuationCount >= config.sessionBudgetMax) {
-    const decision: ContinuationDecision = {
+    return {
       allowed: false,
       blockedReason: `Session budget exhausted (${config.sessionBudgetMax} continuations)`,
     }
-    console.log(`[Continuation Governor] Decision: BLOCKED - ${decision.blockedReason}`)
-    return decision
   }
 
   // All checks passed - ALLOW continuation
@@ -165,11 +146,7 @@ export function requestContinuation(request: ContinuationRequest): ContinuationD
   state.sessionContinuationCount++
   state.lastContinuationTime = now
 
-  console.log(`[Continuation Governor] Decision: ALLOWED`)
-  console.log(`[Continuation Governor] Updated state:`, {
-    consecutiveContinuations: state.consecutiveContinuations,
-    sessionContinuationCount: state.sessionContinuationCount,
-  })
+  log(`[Continuation Governor] Allowed continuation for ${request.hookName}`)
 
   return { allowed: true }
 }
@@ -182,9 +159,6 @@ export function onUserMessage(sessionID: string): void {
   state.lastUserMessageTime = Date.now()
   state.consecutiveContinuations = 0
   state.postSystemOperation = false // User input clears system operation flag
-
-  console.log(`[Continuation Governor] User message received for session ${sessionID}`)
-  console.log(`[Continuation Governor] Reset consecutiveContinuations to 0`)
 }
 
 /**
@@ -193,9 +167,6 @@ export function onUserMessage(sessionID: string): void {
 export function onSystemOperation(sessionID: string): void {
   const state = getOrCreateState(sessionID)
   state.postSystemOperation = true
-
-  console.log(`[Continuation Governor] System operation completed for session ${sessionID}`)
-  console.log(`[Continuation Governor] Set postSystemOperation flag - next continuation will be blocked`)
 }
 
 /**
@@ -217,7 +188,6 @@ export function getGovernorConfig(): GovernorConfig {
  */
 export function cleanupSession(sessionID: string): void {
   sessionStates.delete(sessionID)
-  console.log(`[Continuation Governor] Cleaned up state for session ${sessionID}`)
 }
 
 /**
@@ -225,5 +195,4 @@ export function cleanupSession(sessionID: string): void {
  */
 export function resetGovernor(): void {
   sessionStates.clear()
-  console.log(`[Continuation Governor] Reset all state`)
 }

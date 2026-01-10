@@ -1,4 +1,5 @@
 import { getSessionConfiguration } from "../scenario-detector";
+import { log } from "../../shared/logger";
 
 export interface IntentAnalysis {
   confidence: number;
@@ -20,133 +21,91 @@ export interface ProjectContext {
 export async function analyzeIntent(
   userRequest: string,
   projectContext: ProjectContext,
-  client: any
+  _client: any,
+  sessionID?: string
 ): Promise<IntentAnalysis> {
-  const sessionConfig = getSessionConfiguration();
+  const sessionConfig = getSessionConfiguration(sessionID);
   const threshold = sessionConfig?.confidenceThreshold || 80;
 
-  const analysisPrompt = `You are an intent analyzer for a development AI system. Your job is to determine if a user's request is clear enough to proceed with implementation.
-
-User Request: "${userRequest}"
-
-Project Context:
-${JSON.stringify(projectContext, null, 2)}
-
-Analyze this request and provide:
-1. Confidence score (0-100) - how clear and actionable is this request?
-2. Classification: "clear", "ambiguous", or "under-specified"
-3. Known factors: What do we know for sure from the request?
-4. Ambiguities: What could be interpreted multiple ways?
-5. Missing info: What critical information is missing?
-6. Suggested questions: If confidence is low, what should we ask?
-
-Factors that INCREASE confidence:
-- Specific technical terms
-- References to existing files/code
-- Clear acceptance criteria
-- Explicit constraints
-- Mentions specific scope
-
-Factors that DECREASE confidence:
-- Vague terms ("make it better", "add filtering", "improve")
-- Multiple possible interpretations
-- No scope boundaries
-- Missing critical details (where, how, for whom)
-
-Respond in JSON format:
-{
-  "confidence": <number 0-100>,
-  "classification": "<clear|ambiguous|under-specified>",
-  "knownFactors": ["<factor1>", "<factor2>"],
-  "ambiguities": ["<ambiguity1>", "<ambiguity2>"],
-  "missingInfo": ["<missing1>", "<missing2>"],
-  "suggestedQuestions": ["<question1>", "<question2>"]
-}`;
-
-  try {
-    console.log('[Intent Gate] Calling Gemini Flash for intent analysis...');
-    console.log('[Intent Gate] User request:', userRequest.substring(0, 100));
-    
-    const response = await client.chat.completions.create({
-      model: "google/gemini-3-flash-preview",
-      messages: [
-        {
-          role: "user",
-          content: analysisPrompt + "\n\nIMPORTANT: Respond ONLY with valid JSON matching the exact format specified above. Do not include any text before or after the JSON.",
-        },
-      ],
-      temperature: 0,
-    });
-
-    console.log('[Intent Gate] API response received');
-
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      console.error('[Intent Gate] Empty response from model');
-      console.error('[Intent Gate] Response structure:', JSON.stringify(response, null, 2));
-      return createFallbackAnalysis(userRequest, threshold);
-    }
-
-    let jsonContent = content.trim();
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonContent = jsonMatch[0];
-    }
-
-    const parsed = JSON.parse(jsonContent);
-
-    if (typeof parsed.confidence !== 'number') {
-      console.warn('[Intent Gate] Invalid confidence value, using fallback');
-      return createFallbackAnalysis(userRequest, threshold);
-    }
-
-    console.log('[Intent Gate] Confidence score:', parsed.confidence);
-    console.log('[Intent Gate] Threshold:', threshold);
-    console.log('[Intent Gate] Decision:', parsed.confidence >= threshold ? 'PASS' : 'CLARIFY');
-
-    return {
-      confidence: parsed.confidence || 50,
-      classification: parsed.classification || "ambiguous",
-      knownFactors: parsed.knownFactors || [],
-      ambiguities: parsed.ambiguities || [],
-      missingInfo: parsed.missingInfo || [],
-      suggestedQuestions: parsed.suggestedQuestions || [],
-    };
-  } catch (error) {
-    console.error("=== Intent Analysis Error ===");
-    console.error("Model:", "google/gemini-3-flash-preview");
-    console.error("Error:", error);
-    console.error("Error type:", error instanceof Error ? error.constructor.name : typeof error);
-    console.error("Error message:", error instanceof Error ? error.message : String(error));
-    if (error instanceof Error && error.stack) {
-      console.error("Stack:", error.stack);
-    }
-    console.error("============================");
-    return createFallbackAnalysis(userRequest, threshold);
-  }
+  // Use heuristic analysis (LLM call removed due to API incompatibility)
+  return createFallbackAnalysis(userRequest, threshold, projectContext);
 }
 
-function createFallbackAnalysis(userRequest: string, threshold: number): IntentAnalysis {
+function createFallbackAnalysis(
+  userRequest: string, 
+  threshold: number,
+  projectContext?: ProjectContext
+): IntentAnalysis {
   const requestLower = userRequest.toLowerCase();
   
-  const vagueTerms = ["better", "improve", "fix", "add", "update", "change"];
-  const hasVagueTerms = vagueTerms.some((term) => requestLower.includes(term));
+  // Vague terms that decrease confidence
+  const vagueTerms = ["better", "improve", "fix", "add", "update", "change", "make", "do", "help"];
+  const hasVagueTerms = vagueTerms.some((term) => {
+    const regex = new RegExp(`\\b${term}\\b`, 'i');
+    return regex.test(requestLower);
+  });
   
-  const hasSpecifics = /\b(file|line|function|component|class|method)\b/i.test(userRequest);
+  // Specific terms that increase confidence
+  const hasSpecifics = /\b(file|line|function|component|class|method|error|bug|typo|test|api|endpoint|route|page|button|form|database|schema|migration|config|env)\b/i.test(userRequest);
+  const hasFilePath = /[\/\\][\w\-\.]+\.(ts|tsx|js|jsx|json|md|css|html|py|go|rs|java|rb|php|vue|svelte)/.test(userRequest);
+  const hasCodeReference = /`[^`]+`/.test(userRequest) || /['"][^'"]+['"]/.test(userRequest);
+  const hasExplicitAction = /\b(create|delete|remove|rename|move|copy|install|uninstall|run|execute|build|deploy|test|lint|format)\b/i.test(userRequest);
   
-  let confidence = 50;
+  // Calculate confidence
+  let confidence = 40; // Base
+  
   if (hasSpecifics) confidence += 20;
-  if (!hasVagueTerms) confidence += 15;
-  if (userRequest.length > 50) confidence += 10;
+  if (hasFilePath) confidence += 15;
+  if (hasCodeReference) confidence += 10;
+  if (hasExplicitAction) confidence += 15;
+  if (!hasVagueTerms) confidence += 10;
+  if (userRequest.length > 100) confidence += 10;
+  if (userRequest.length > 200) confidence += 5;
+  
+  // Cap at 100
+  confidence = Math.min(confidence, 100);
   
   const classification = confidence >= threshold ? "clear" : confidence >= 60 ? "ambiguous" : "under-specified";
+
+  // Build analysis
+  const knownFactors: string[] = [];
+  const ambiguities: string[] = [];
+  const missingInfo: string[] = [];
+  const suggestedQuestions: string[] = [];
+
+  if (hasSpecifics) knownFactors.push("Request mentions specific code elements");
+  if (hasFilePath) knownFactors.push("Request includes file path references");
+  if (hasCodeReference) knownFactors.push("Request includes code or string references");
+  if (hasExplicitAction) knownFactors.push("Request has clear action verb");
+  
+  if (hasVagueTerms && !hasSpecifics) {
+    ambiguities.push("Request uses vague terms without specific targets");
+    suggestedQuestions.push("What specific file, component, or feature should I focus on?");
+  }
+  
+  if (!hasFilePath && !hasCodeReference) {
+    missingInfo.push("No specific files or code elements mentioned");
+    suggestedQuestions.push("Can you point me to the specific file or code you want me to work on?");
+  }
+  
+  if (!hasExplicitAction) {
+    missingInfo.push("No clear action specified");
+    suggestedQuestions.push("What exactly would you like me to do? (e.g., create, fix, refactor, add)");
+  }
+  
+  if (userRequest.length < 30) {
+    missingInfo.push("Request is very brief");
+    suggestedQuestions.push("Can you provide more details about what you're trying to achieve?");
+  }
+
+  log('[Intent Gate] Heuristic analysis:', { confidence, classification, threshold });
 
   return {
     confidence,
     classification,
-    knownFactors: hasSpecifics ? ["Request mentions specific code elements"] : [],
-    ambiguities: hasVagueTerms ? ["Request uses vague terms that could mean different things"] : [],
-    missingInfo: !hasSpecifics ? ["No specific files or code elements mentioned"] : [],
-    suggestedQuestions: classification !== "clear" ? ["Can you be more specific about what you want to change?"] : [],
+    knownFactors,
+    ambiguities,
+    missingInfo,
+    suggestedQuestions,
   };
 }

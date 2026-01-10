@@ -2,6 +2,8 @@ import * as fs from "fs";
 import * as path from "path";
 import type { Hooks } from "@opencode-ai/plugin";
 import { detectScenario, parseUserOverride, SCENARIOS, type SessionConfiguration } from "./signatures";
+import { isDebugEnabled } from "../../features/aide-debug-state";
+import { log } from "../../shared/logger";
 
 const sessionConfigurations = new Map<string, SessionConfiguration>();
 const detectedSessions = new Set<string>();
@@ -30,15 +32,11 @@ export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks =>
     "chat.message": async (input: any, output: any) => {
       const sessionID = (input as { sessionID?: string }).sessionID;
       
-      console.log('[Scenario Detector] Hook triggered', { sessionID });
-      
       if (!sessionID) {
-        console.log('[Scenario Detector] No sessionID, skipping');
         return;
       }
       
       if (detectedSessions.has(sessionID)) {
-        console.log('[Scenario Detector] Already detected for this session, skipping');
         return;
       }
 
@@ -71,13 +69,30 @@ export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks =>
       const detectedScenario = detectScenario(userMessage, projectContext);
 
       if (detectedScenario) {
-        console.log('[Scenario Detector] Detected mode:', detectedScenario.mode);
+        log('[Scenario Detector] Detected mode:', detectedScenario.mode);
+        
+        if (isDebugEnabled() && parts) {
+          const debugMessage = `🔍 [Scenario Detector] Mode: ${detectedScenario.mode} | Confidence: ${detectedScenario.confidenceThreshold}% | Verification: ${detectedScenario.requiredVerification.join(", ")}`;
+          const textPartIndex = parts.findIndex((p) => p.type === "text" && p.text);
+          if (textPartIndex >= 0 && parts[textPartIndex]) {
+            parts[textPartIndex].text = `${debugMessage}\n\n${parts[textPartIndex].text ?? ""}`;
+          }
+        }
+        
         applyScenario(ctx.directory, sessionID, detectedScenario);
         detectedSessions.add(sessionID);
       } else {
-        console.log('[Scenario Detector] No match, using default: feature');
+        log('[Scenario Detector] No match, using default: feature');
         const defaultScenario = SCENARIOS.find((s) => s.mode === "feature");
         if (defaultScenario) {
+          if (isDebugEnabled() && parts) {
+            const debugMessage = `🔍 [Scenario Detector] Mode: feature (default) | Confidence: ${defaultScenario.confidenceThreshold}% | Verification: ${defaultScenario.requiredVerification.join(", ")}`;
+            const textPartIndex = parts.findIndex((p) => p.type === "text" && p.text);
+            if (textPartIndex >= 0 && parts[textPartIndex]) {
+              parts[textPartIndex].text = `${debugMessage}\n\n${parts[textPartIndex].text ?? ""}`;
+            }
+          }
+          
           applyScenario(ctx.directory, sessionID, defaultScenario);
           detectedSessions.add(sessionID);
         }
@@ -95,14 +110,12 @@ function analyzeProjectContext(directory: string): { isEmpty: boolean; hasPackag
     const hasPackageJson = files.includes("package.json");
 
     return { isEmpty, hasPackageJson };
-  } catch (error) {
+  } catch {
     return { isEmpty: true, hasPackageJson: false };
   }
 }
 
 function applyScenario(directory: string, sessionID: string, scenario: any): void {
-  console.log('[Scenario Detector] Applying scenario:', scenario.mode);
-  
   const config: SessionConfiguration = {
     mode: scenario.mode,
     confidenceThreshold: scenario.confidenceThreshold,
@@ -112,17 +125,17 @@ function applyScenario(directory: string, sessionID: string, scenario: any): voi
   };
 
   setSessionConfiguration(sessionID, config);
-  console.log('[Scenario Detector] Session config set:', config);
 
   const constraintsPath = path.join(directory, "docs", "agent", "constraints.md");
   const constraintsDir = path.dirname(constraintsPath);
 
-  if (!fs.existsSync(constraintsDir)) {
-    fs.mkdirSync(constraintsDir, { recursive: true });
-  }
+  try {
+    if (!fs.existsSync(constraintsDir)) {
+      fs.mkdirSync(constraintsDir, { recursive: true });
+    }
 
-  const now = new Date().toISOString();
-  const constraintsContent = `# Session Constraints
+    const now = new Date().toISOString();
+    const constraintsContent = `# Session Constraints
 
 **Created:** ${now}
 **Mode:** ${scenario.mode}
@@ -160,7 +173,10 @@ ${getAllowedActions(scenario.mode)}
 ${getProhibitedActions(scenario.mode)}
 `;
 
-  fs.writeFileSync(constraintsPath, constraintsContent, "utf-8");
+    fs.writeFileSync(constraintsPath, constraintsContent, "utf-8");
+  } catch {
+    // Silently fail if we can't write constraints file
+  }
 }
 
 function getAllowedActions(mode: string): string {

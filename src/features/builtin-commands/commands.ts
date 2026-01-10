@@ -59,6 +59,11 @@ $ARGUMENTS
 </user-request>`,
     argumentHint: "[plan-name]",
   },
+  "debug": {
+    description: "(builtin) Toggle AIDE debug mode - shows scenario detection and intent analysis in chat",
+    template: "Debug mode toggle (handled immediately, not by agent)",
+    argumentHint: "<on|off|status>",
+  },
 }
 
 export function loadBuiltinCommands(

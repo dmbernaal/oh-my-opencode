@@ -49,6 +49,7 @@ import {
 } from "./features/continuation-governor";
 import { resetScenarioDetection } from "./hooks/scenario-detector";
 import { resetClarificationRound } from "./hooks/intent-gate";
+import { initializeAideDebug } from "./features/aide-debug-state";
 import { createGoogleAntigravityAuthPlugin } from "./auth/antigravity";
 import {
   discoverUserClaudeSkills,
@@ -94,6 +95,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
   const isHookEnabled = (hookName: HookName) => !disabledHooks.has(hookName);
 
   initializeContinuationGovernor();
+  initializeAideDebug(pluginConfig.aide_debug);
 
   const modelCacheState = createModelCacheState();
 
@@ -220,9 +222,14 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
 
   const projectContextEnforcer = createProjectContextEnforcerHook(ctx);
 
-  const scenarioDetector = createScenarioDetectorHook(ctx);
+  const scenarioDetector = createScenarioDetectorHook({ 
+    directory: ctx.directory
+  });
 
-  const intentGate = createIntentGateHook({ directory: ctx.directory, client: ctx.client });
+  const intentGate = createIntentGateHook({ 
+    directory: ctx.directory, 
+    client: ctx.client
+  });
 
   const verificationEnforcer = createVerificationEnforcerHook({ directory: ctx.directory });
 

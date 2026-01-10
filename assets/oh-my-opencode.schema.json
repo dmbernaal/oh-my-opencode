@@ -90,6 +90,9 @@
         "type": "string",
         "enum": [
           "init-deep",
+          "ralph-loop",
+          "cancel-ralph",
+          "refactor",
           "start-work"
         ]
       }
@@ -2385,6 +2388,9 @@
           "type": "boolean"
         }
       }
+    },
+    "aide_debug": {
+      "type": "boolean"
     }
   }
 }

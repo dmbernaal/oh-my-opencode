@@ -3,6 +3,8 @@ import * as path from "path";
 import type { Hooks } from "@opencode-ai/plugin";
 import { analyzeIntent, type ProjectContext } from "./analyzer";
 import { getSessionConfiguration } from "../scenario-detector";
+import { isDebugEnabled } from "../../features/aide-debug-state";
+import { log } from "../../shared/logger";
 
 const clarificationRounds = new Map<string, number>();
 const MAX_CLARIFICATION_ROUNDS = 3;
@@ -12,16 +14,12 @@ export const createIntentGateHook = (ctx: { directory: string; client: any }): H
     "chat.message": async (input: any, output: any) => {
       const sessionID = (input as { sessionID?: string }).sessionID;
       
-      console.log('[Intent Gate] Hook triggered', { sessionID });
-      
       if (!sessionID) {
-        console.log('[Intent Gate] No sessionID, skipping');
         return;
       }
       
       const parts = (output as { parts?: Array<{ type: string; text?: string }> }).parts;
       if (!parts || parts.length === 0) {
-        console.log('[Intent Gate] No parts in output, skipping');
         return;
       }
 
@@ -31,16 +29,18 @@ export const createIntentGateHook = (ctx: { directory: string; client: any }): H
         .join(" ");
 
       if (!userMessage || userMessage.trim().length === 0) {
-        console.log('[Intent Gate] Empty user message, skipping');
         return;
       }
 
-      console.log('[Intent Gate] User message:', userMessage.substring(0, 100));
-
+      // Skip if user is confirming/continuing
       if (userMessage.toLowerCase().includes("execute the plan") || 
           userMessage.toLowerCase().includes("let's implement") ||
-          userMessage.toLowerCase().includes("continue")) {
-        console.log('[Intent Gate] Skip keyword detected, bypassing');
+          userMessage.toLowerCase().includes("continue") ||
+          userMessage.toLowerCase().includes("proceed") ||
+          userMessage.toLowerCase().includes("go ahead") ||
+          userMessage.toLowerCase().includes("yes") ||
+          userMessage.toLowerCase().includes("ok") ||
+          userMessage.toLowerCase().includes("sounds good")) {
         return;
       }
 
@@ -48,39 +48,51 @@ export const createIntentGateHook = (ctx: { directory: string; client: any }): H
       const sessionConfig = getSessionConfiguration(sessionID);
 
       if (!sessionConfig) {
-        console.log('[Intent Gate] No session config found, skipping (Scenario Detector may not have run yet)');
+        log('[Intent Gate] No session config, skipping');
         return;
       }
 
-      console.log('[Intent Gate] Session config:', sessionConfig);
-
-      const analysis = await analyzeIntent(userMessage, projectContext, ctx.client);
+      const analysis = await analyzeIntent(userMessage, projectContext, ctx.client, sessionID);
 
       const currentRound = clarificationRounds.get(sessionID) ?? 0;
 
+      // Prepend debug message if enabled
+      if (isDebugEnabled() && parts) {
+        const debugMessage = `🔍 [Intent Gate] Confidence: ${analysis.confidence}% | Threshold: ${sessionConfig.confidenceThreshold}% | Decision: ${analysis.confidence >= sessionConfig.confidenceThreshold ? "PASS" : "CLARIFY"} | Round: ${currentRound + 1}/${MAX_CLARIFICATION_ROUNDS}`;
+        const textPartIndex = parts.findIndex((p) => p.type === "text" && p.text);
+        if (textPartIndex >= 0 && parts[textPartIndex]) {
+          parts[textPartIndex].text = `${debugMessage}\n\n${parts[textPartIndex].text ?? ""}`;
+        }
+      }
+
+      // If confidence is sufficient, proceed
       if (analysis.confidence >= sessionConfig.confidenceThreshold) {
-        console.log('[Intent Gate] Confidence sufficient, clearing clarification rounds');
         clarificationRounds.set(sessionID, 0);
         return;
       }
 
+      // If max rounds reached, proceed with assumptions
       if (currentRound >= MAX_CLARIFICATION_ROUNDS) {
-        parts.push({
-          type: "text",
-          text: `\n\n---\n\n⚠️ **Proceeding with Assumptions**\n\nAfter ${MAX_CLARIFICATION_ROUNDS} rounds of clarification, I'll proceed with my best understanding. I've noted the following assumptions in the plan:\n\n${analysis.ambiguities.map((a) => `- ${a}`).join("\n")}\n\nIf any of these assumptions are wrong, please let me know and I'll adjust.`,
-        });
+        const textPartIndex = parts.findIndex((p) => p.type === "text" && p.text);
+        if (textPartIndex >= 0) {
+          const assumptionsList = analysis.ambiguities.length > 0 
+            ? analysis.ambiguities.map((a) => `- ${a}`).join("\n")
+            : "- Proceeding with best interpretation of the request";
+          parts[textPartIndex].text = `${parts[textPartIndex].text}\n\n---\n\n⚠️ **Proceeding with Assumptions**\n\nAfter ${MAX_CLARIFICATION_ROUNDS} clarification attempts, I'll proceed with my best understanding:\n\n${assumptionsList}\n\nLet me know if I should adjust.`;
+        }
         clarificationRounds.set(sessionID, 0);
         return;
       }
 
+      // Increment round and add clarification
       clarificationRounds.set(sessionID, currentRound + 1);
 
       const clarificationMessage = buildClarificationMessage(analysis);
       
-      parts.push({
-        type: "text",
-        text: clarificationMessage,
-      });
+      const textPartIndex = parts.findIndex((p) => p.type === "text" && p.text);
+      if (textPartIndex >= 0) {
+        parts[textPartIndex].text = `${parts[textPartIndex].text}${clarificationMessage}`;
+      }
     },
   };
 };
@@ -108,47 +120,39 @@ function loadProjectContext(directory: string): ProjectContext {
       hasLint,
       conventions: [],
     };
-  } catch (error) {
+  } catch {
     return {};
   }
 }
 
 function buildClarificationMessage(analysis: any): string {
-  let message = "\n\n---\n\n🤔 **Before I proceed, I want to make sure I understand what you're looking for.**\n\n";
+  let message = "\n\n---\n\n🤔 **Before I proceed, I want to make sure I understand your request.**\n\n";
 
   if (analysis.knownFactors.length > 0) {
-    message += "**What I understand so far:**\n";
+    message += "**What I understand:**\n";
     analysis.knownFactors.forEach((factor: string) => {
-      message += `- ${factor}\n`;
-    });
-    message += "\n";
-  }
-
-  if (analysis.ambiguities.length > 0) {
-    message += "**What's ambiguous:**\n";
-    analysis.ambiguities.forEach((ambiguity: string) => {
-      message += `- ${ambiguity}\n`;
+      message += `✓ ${factor}\n`;
     });
     message += "\n";
   }
 
   if (analysis.missingInfo.length > 0) {
-    message += "**What I need to know:**\n";
+    message += "**What would help:**\n";
     analysis.missingInfo.forEach((info: string) => {
-      message += `- ${info}\n`;
+      message += `• ${info}\n`;
     });
     message += "\n";
   }
 
   if (analysis.suggestedQuestions.length > 0) {
-    message += "**Specifically:**\n";
-    analysis.suggestedQuestions.forEach((question: string, idx: number) => {
+    message += "**Quick questions:**\n";
+    analysis.suggestedQuestions.slice(0, 3).forEach((question: string, idx: number) => {
       message += `${idx + 1}. ${question}\n`;
     });
     message += "\n";
   }
 
-  message += "Once I understand these details, I can create a solid plan.\n\n---";
+  message += "_Reply with details, or say 'proceed' to continue with my best guess._\n\n---";
 
   return message;
 }

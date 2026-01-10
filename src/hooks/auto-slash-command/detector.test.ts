@@ -174,6 +174,13 @@ After`
       expect(isExcludedCommand("cancel-ralph")).toBe(true)
     })
 
+    it("should exclude debug", () => {
+      // #given debug command
+      // #when checking exclusion
+      // #then should be excluded
+      expect(isExcludedCommand("debug")).toBe(true)
+    })
+
     it("should be case-insensitive for exclusion", () => {
       // #given uppercase variants
       // #when checking exclusion

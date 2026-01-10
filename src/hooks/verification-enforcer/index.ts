@@ -2,6 +2,7 @@ import type { Hooks } from "@opencode-ai/plugin";
 import { getSessionConfiguration } from "../scenario-detector";
 import { detectVerificationEvidence } from "./patterns";
 import { updateVerificationStatus } from "../../utils/active-plan";
+import { log } from "../../shared/logger";
 
 export const createVerificationEnforcerHook = (ctx: { directory: string }): Hooks => {
   let recentToolOutputs: string[] = [];
@@ -9,7 +10,6 @@ export const createVerificationEnforcerHook = (ctx: { directory: string }): Hook
 
   return {
     "tool.execute.after": async (input: any, output: any) => {
-      console.log('[Verification Enforcer] Hook triggered for tool:', input.tool);
       const toolOutput = JSON.stringify(output);
       recentToolOutputs.push(toolOutput);
 
@@ -27,7 +27,7 @@ export const createVerificationEnforcerHook = (ctx: { directory: string }): Hook
           return;
         }
 
-        const sessionConfig = getSessionConfiguration();
+        const sessionConfig = getSessionConfiguration(input.sessionID);
         if (!sessionConfig) {
           return;
         }
@@ -54,25 +54,23 @@ export const createVerificationEnforcerHook = (ctx: { directory: string }): Hook
         }
 
         if (missingChecks.length > 0) {
+          log('[Verification Enforcer] Missing checks:', missingChecks);
+          
           if (sessionConfig.mode === "surgery") {
+            // Surgery mode: warning only, append to output
             const warningMessage = `\n\n⚠️ **Verification Recommended**\n\nYou're marking work as complete, but I haven't seen evidence for:\n${missingChecks.map((c) => `- ${c}`).join("\n")}\n\nFor surgery mode, this is a warning, not a blocker. But it's good practice to verify.`;
             
-            const parts = (output as { parts?: Array<{ type: string; text?: string }> }).parts;
-            if (parts) {
-              parts.push({
-                type: "text",
-                text: warningMessage,
-              });
+            // Append to result instead of pushing to parts
+            if (output && typeof output === 'object') {
+              output.verificationWarning = warningMessage;
             }
           } else {
+            // Other modes: blocking message
             const blockingMessage = `\n\n🛑 **VERIFICATION REQUIRED**\n\nYou are attempting to mark work as complete, but verification evidence is missing.\n\nBefore completing this task, you must run and show output for:\n${missingChecks.map((c) => `- [ ] ${c}`).join("\n")}\n\nRun these commands and include the output, then you may mark the task complete.`;
             
-            const parts = (output as { parts?: Array<{ type: string; text?: string }> }).parts;
-            if (parts) {
-              parts.push({
-                type: "text",
-                text: blockingMessage,
-              });
+            // Append to result instead of pushing to parts
+            if (output && typeof output === 'object') {
+              output.verificationRequired = blockingMessage;
             }
           }
         } else {

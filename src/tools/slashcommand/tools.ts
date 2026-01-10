@@ -6,6 +6,7 @@ import type { CommandFrontmatter } from "../../features/claude-code-command-load
 import { isMarkdownFile } from "../../shared/file-utils"
 import { getClaudeConfigDir } from "../../shared"
 import { discoverAllSkills, type LoadedSkill } from "../../features/opencode-skill-loader"
+import { loadBuiltinCommands } from "../../features/builtin-commands"
 import type { CommandScope, CommandMetadata, CommandInfo, SlashcommandToolOptions } from "./types"
 
 function discoverCommandsFromDir(commandsDir: string, scope: CommandScope): CommandInfo[] {
@@ -51,6 +52,30 @@ function discoverCommandsFromDir(commandsDir: string, scope: CommandScope): Comm
   return commands
 }
 
+function loadBuiltinCommandsAsInfo(): CommandInfo[] {
+  const builtinCommands = loadBuiltinCommands()
+  const commandInfos: CommandInfo[] = []
+
+  for (const [name, definition] of Object.entries(builtinCommands)) {
+    commandInfos.push({
+      name,
+      path: undefined,
+      metadata: {
+        name,
+        description: definition.description || "",
+        argumentHint: (definition as any).argumentHint,
+        model: definition.model,
+        agent: definition.agent,
+        subtask: definition.subtask,
+      },
+      content: definition.template,
+      scope: "builtin",
+    })
+  }
+
+  return commandInfos
+}
+
 export function discoverCommandsSync(): CommandInfo[] {
   const { homedir } = require("os")
   const userCommandsDir = join(getClaudeConfigDir(), "commands")
@@ -58,12 +83,13 @@ export function discoverCommandsSync(): CommandInfo[] {
   const opencodeGlobalDir = join(homedir(), ".config", "opencode", "command")
   const opencodeProjectDir = join(process.cwd(), ".opencode", "command")
 
+  const builtinCommands = loadBuiltinCommandsAsInfo()
   const userCommands = discoverCommandsFromDir(userCommandsDir, "user")
   const opencodeGlobalCommands = discoverCommandsFromDir(opencodeGlobalDir, "opencode")
   const projectCommands = discoverCommandsFromDir(projectCommandsDir, "project")
   const opencodeProjectCommands = discoverCommandsFromDir(opencodeProjectDir, "opencode-project")
 
-  return [...opencodeProjectCommands, ...projectCommands, ...opencodeGlobalCommands, ...userCommands]
+  return [...builtinCommands, ...opencodeProjectCommands, ...projectCommands, ...opencodeGlobalCommands, ...userCommands]
 }
 
 function skillToCommandInfo(skill: LoadedSkill): CommandInfo {
