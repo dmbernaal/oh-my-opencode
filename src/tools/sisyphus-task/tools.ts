@@ -10,6 +10,13 @@ import { resolveMultipleSkills } from "../../features/opencode-skill-loader/skil
 import { createBuiltinSkills } from "../../features/builtin-skills/skills"
 import { getTaskToastManager } from "../../features/task-toast-manager"
 import { subagentSessions } from "../../features/claude-code-session-state"
+import { readBoulderState } from "../../features/boulder-state"
+import {
+  shouldInjectNotepad,
+  readNotepadContext,
+  buildInjectedPrompt,
+  getActivePlanName,
+} from "../../features/notepad-system"
 
 type OpencodeClient = PluginInput["client"]
 
@@ -89,6 +96,7 @@ export interface SisyphusTaskToolOptions {
   manager: BackgroundManager
   client: OpencodeClient
   userCategories?: CategoriesConfig
+  directory?: string
 }
 
 export interface BuildSystemContentInput {
@@ -110,8 +118,43 @@ export function buildSystemContent(input: BuildSystemContentInput): string | und
   return skillContent || categoryPromptAppend
 }
 
+function maybeInjectNotepadContext(
+  prompt: string,
+  directory: string | undefined,
+  category: string | undefined,
+  agent: string | undefined
+): string {
+  if (!directory) {
+    return prompt
+  }
+
+  const planName = getActivePlanName(directory, readBoulderState)
+  if (!planName) {
+    return prompt
+  }
+
+  const shouldInject = shouldInjectNotepad({
+    planName,
+    directory,
+    category,
+    agent,
+  })
+
+  if (!shouldInject) {
+    return prompt
+  }
+
+  const context = readNotepadContext({
+    planName,
+    directory,
+    category,
+  })
+
+  return buildInjectedPrompt(context, prompt)
+}
+
 export function createSisyphusTask(options: SisyphusTaskToolOptions): ToolDefinition {
-  const { manager, client, userCategories } = options
+  const { manager, client, userCategories, directory } = options
 
   return tool({
     description: SISYPHUS_TASK_DESCRIPTION,
@@ -210,7 +253,7 @@ Use \`background_output\` with task_id="${task.id}" to check progress.`
                 task: false,
                 sisyphus_task: false,
               },
-              parts: [{ type: "text", text: args.prompt }],
+            parts: [{ type: "text", text: args.prompt }],
             },
           })
         } catch (promptError) {
@@ -318,11 +361,18 @@ ${textContent || "(No text output)"}`
 
       const systemContent = buildSystemContent({ skillContent, categoryPromptAppend })
 
+      const injectedPrompt = maybeInjectNotepadContext(
+        args.prompt,
+        directory,
+        args.category,
+        agentToUse
+      )
+
       if (runInBackground) {
         try {
           const task = await manager.launch({
             description: args.description,
-            prompt: args.prompt,
+            prompt: injectedPrompt,
             agent: agentToUse,
             parentSessionID: ctx.sessionID,
             parentMessageID: ctx.messageID,
@@ -402,7 +452,7 @@ System notifies on completion. Use \`background_output\` with task_id="${task.id
               task: false,
               sisyphus_task: false,
             },
-            parts: [{ type: "text", text: args.prompt }],
+            parts: [{ type: "text", text: injectedPrompt }],
           },
         }).catch((error) => {
           promptError = error instanceof Error ? error : new Error(String(error))

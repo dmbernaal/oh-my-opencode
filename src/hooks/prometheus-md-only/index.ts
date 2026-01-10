@@ -1,7 +1,7 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
-import { HOOK_NAME, PROMETHEUS_AGENTS, ALLOWED_EXTENSIONS, ALLOWED_PATH_PREFIX, BLOCKED_TOOLS, PLANNING_CONSULT_WARNING } from "./constants"
+import { HOOK_NAME, PROMETHEUS_AGENTS, ALLOWED_EXTENSIONS, ALLOWED_PATH_PREFIX, BLOCKED_TOOLS, PLANNING_CONSULT_WARNING, BASH_WRITE_PATTERNS } from "./constants"
 import { findNearestMessageWithFields, MESSAGE_STORAGE } from "../../features/hook-message-injector"
 import { log } from "../../shared/logger"
 
@@ -59,6 +59,27 @@ export function createPrometheusMdOnlyHook(_ctx: PluginInput) {
             tool: toolName,
             agent: agentName,
           })
+        }
+        return
+      }
+
+      if (toolName === "bash" || toolName === "Bash") {
+        const command = output.args.command as string | undefined
+        if (command) {
+          const hasBashWrite = BASH_WRITE_PATTERNS.some(pattern => pattern.test(command))
+          if (hasBashWrite) {
+            log(`[${HOOK_NAME}] Blocked: Prometheus cannot use bash to write files`, {
+              sessionID: input.sessionID,
+              tool: toolName,
+              command: command.substring(0, 100),
+              agent: agentName,
+            })
+            throw new Error(
+              `[${HOOK_NAME}] Prometheus (Planner) cannot use bash commands that modify files. ` +
+              `Detected file-modifying command. ` +
+              `Prometheus is a READ-ONLY planner. Create a plan file in .sisyphus/plans/ and let Sisyphus execute it.`
+            )
+          }
         }
         return
       }

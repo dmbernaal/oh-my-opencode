@@ -295,4 +295,114 @@ describe("prometheus-md-only", () => {
       ).resolves.toBeUndefined()
     })
   })
+
+  describe("bash write blocking", () => {
+    beforeEach(() => {
+      setupMessageStorage(TEST_SESSION_ID, "Prometheus (Planner)")
+    })
+
+    test("should block cat > file write commands", async () => {
+      // #given
+      const hook = createPrometheusMdOnlyHook(createMockPluginInput())
+      const input = {
+        tool: "bash",
+        sessionID: TEST_SESSION_ID,
+        callID: "call-1",
+      }
+      const output = {
+        args: { command: "cat > components/button.tsx << 'EOF'\nexport const Button = () => {}\nEOF" },
+      }
+
+      // #when / #then
+      await expect(hook["tool.execute.before"](input, output)).rejects.toThrow(
+        "Prometheus (Planner) cannot use bash commands that modify files"
+      )
+    })
+
+    test("should block heredoc writes", async () => {
+      // #given
+      const hook = createPrometheusMdOnlyHook(createMockPluginInput())
+      const input = {
+        tool: "Bash",
+        sessionID: TEST_SESSION_ID,
+        callID: "call-1",
+      }
+      const output = {
+        args: { command: "cat > file.ts <<EOF\ncode\nEOF" },
+      }
+
+      // #when / #then
+      await expect(hook["tool.execute.before"](input, output)).rejects.toThrow(
+        "Prometheus (Planner) cannot use bash commands that modify files"
+      )
+    })
+
+    test("should block echo redirect writes", async () => {
+      // #given
+      const hook = createPrometheusMdOnlyHook(createMockPluginInput())
+      const input = {
+        tool: "bash",
+        sessionID: TEST_SESSION_ID,
+        callID: "call-1",
+      }
+      const output = {
+        args: { command: 'echo "content" > file.txt' },
+      }
+
+      // #when / #then
+      await expect(hook["tool.execute.before"](input, output)).rejects.toThrow(
+        "Prometheus (Planner) cannot use bash commands that modify files"
+      )
+    })
+
+    test("should block tee commands", async () => {
+      // #given
+      const hook = createPrometheusMdOnlyHook(createMockPluginInput())
+      const input = {
+        tool: "bash",
+        sessionID: TEST_SESSION_ID,
+        callID: "call-1",
+      }
+      const output = {
+        args: { command: "echo 'content' | tee file.txt" },
+      }
+
+      // #when / #then
+      await expect(hook["tool.execute.before"](input, output)).rejects.toThrow(
+        "Prometheus (Planner) cannot use bash commands that modify files"
+      )
+    })
+
+    test("should allow read-only bash commands", async () => {
+      // #given
+      const hook = createPrometheusMdOnlyHook(createMockPluginInput())
+      const input = {
+        tool: "bash",
+        sessionID: TEST_SESSION_ID,
+        callID: "call-1",
+      }
+      const output = {
+        args: { command: "ls -la && git status" },
+      }
+
+      // #when / #then
+      await expect(hook["tool.execute.before"](input, output)).resolves.toBeUndefined()
+    })
+
+    test("should allow mkdir inside .sisyphus directory", async () => {
+      // #given
+      const hook = createPrometheusMdOnlyHook(createMockPluginInput())
+      const input = {
+        tool: "bash",
+        sessionID: TEST_SESSION_ID,
+        callID: "call-1",
+      }
+      const output = {
+        args: { command: "mkdir -p .sisyphus/plans" },
+      }
+
+      // #when / #then
+      await expect(hook["tool.execute.before"](input, output)).resolves.toBeUndefined()
+    })
+  })
 })

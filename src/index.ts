@@ -220,7 +220,9 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     ? createSisyphusOrchestratorHook(ctx)
     : null;
 
-  const projectContextEnforcer = createProjectContextEnforcerHook(ctx);
+  const projectContextEnforcer = isHookEnabled("project-context-enforcer")
+    ? createProjectContextEnforcerHook(ctx)
+    : null;
 
   const scenarioDetector = createScenarioDetectorHook({ 
     directory: ctx.directory
@@ -265,6 +267,7 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     manager: backgroundManager,
     client: ctx.client,
     userCategories: pluginConfig.categories,
+    directory: ctx.directory,
   });
 
   const autoCodeSimplifier = createAutoCodeSimplifierHook(ctx, {

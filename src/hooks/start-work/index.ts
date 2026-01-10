@@ -8,6 +8,7 @@ import {
   createBoulderState,
   getPlanName,
 } from "../../features/boulder-state"
+import { initializeNotepads } from "../../features/notepad-system"
 import { log } from "../../shared/logger"
 
 export const HOOK_NAME = "start-work"
@@ -100,6 +101,7 @@ All ${plans.length} plan(s) are complete. Create a new plan with: /plan "your ta
           const progress = getPlanProgress(planPath)
           const newState = createBoulderState(planPath, sessionId)
           writeBoulderState(ctx.directory, newState)
+          initializeNotepads(ctx.directory, newState.plan_name)
 
           contextInfo += `
 

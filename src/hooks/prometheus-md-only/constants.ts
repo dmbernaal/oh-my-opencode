@@ -8,6 +8,21 @@ export const ALLOWED_PATH_PREFIX = ".sisyphus/"
 
 export const BLOCKED_TOOLS = ["Write", "Edit", "write", "edit"]
 
+export const BASH_WRITE_PATTERNS = [
+  /\bcat\s+>\s*/i,
+  /\bcat\s+>>\s*/i,
+  /\becho\s+.*>\s*/i,
+  /\becho\s+.*>>\s*/i,
+  /\btee\s+/i,
+  /\bprintf\s+.*>\s*/i,
+  /<<\s*['"]?EOF/i,
+  /<<\s*['"]?END/i,
+  /\bmkdir\s+(?!.*\.sisyphus)/i,
+  /\btouch\s+(?!.*\.sisyphus)/i,
+  /\bcp\s+/i,
+  /\bmv\s+/i,
+]
+
 export const PLANNING_CONSULT_WARNING = `
 
 ---
