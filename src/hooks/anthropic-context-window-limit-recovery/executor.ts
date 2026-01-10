@@ -18,6 +18,7 @@ import {
   injectTextPart,
   replaceEmptyTextParts,
 } from "../session-recovery/storage";
+import { onSystemOperation } from "../../features/continuation-governor";
 import { log } from "../../shared/logger";
 
 const PLACEHOLDER_TEXT = "[user interrupted]";
@@ -503,6 +504,7 @@ export async function executeCompact(
             body: summarizeBody as never,
             query: { directory },
           });
+          onSystemOperation(sessionID);
           return;
         } catch {
           const delay =

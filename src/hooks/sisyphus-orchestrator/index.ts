@@ -9,6 +9,7 @@ import {
 } from "../../features/boulder-state"
 import { getMainSessionID, subagentSessions } from "../../features/claude-code-session-state"
 import { findNearestMessageWithFields, MESSAGE_STORAGE } from "../../features/hook-message-injector"
+import { requestContinuation } from "../../features/continuation-governor"
 import { log } from "../../shared/logger"
 import type { BackgroundManager } from "../../features/background-agent"
 
@@ -384,6 +385,17 @@ export function createSisyphusOrchestratorHook(
   }
 
   async function injectContinuation(sessionID: string, planName: string, remaining: number, total: number): Promise<void> {
+    const decision = requestContinuation({
+      hookName: HOOK_NAME,
+      reason: `Boulder plan "${planName}" has ${remaining}/${total} tasks remaining`,
+      sessionID,
+    })
+
+    if (!decision.allowed) {
+      log(`[${HOOK_NAME}] Continuation blocked by Governor: ${decision.blockedReason}`, { sessionID })
+      return
+    }
+
     const hasRunningBgTasks = backgroundManager
       ? backgroundManager.getTasksByParentSession(sessionID).some(t => t.status === "running")
       : false

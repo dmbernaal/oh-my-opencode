@@ -4,13 +4,20 @@ import type { Hooks } from "@opencode-ai/plugin";
 import { analyzeIntent, type ProjectContext } from "./analyzer";
 import { getSessionConfiguration } from "../scenario-detector";
 
-let clarificationRound = 0;
+const clarificationRounds = new Map<string, number>();
 const MAX_CLARIFICATION_ROUNDS = 3;
 
 export const createIntentGateHook = (ctx: { directory: string; client: any }): Hooks => {
   return {
     "chat.message": async (input: any, output: any) => {
-      console.log('[Intent Gate] Hook triggered');
+      const sessionID = (input as { sessionID?: string }).sessionID;
+      
+      console.log('[Intent Gate] Hook triggered', { sessionID });
+      
+      if (!sessionID) {
+        console.log('[Intent Gate] No sessionID, skipping');
+        return;
+      }
       
       const parts = (output as { parts?: Array<{ type: string; text?: string }> }).parts;
       if (!parts || parts.length === 0) {
@@ -33,33 +40,40 @@ export const createIntentGateHook = (ctx: { directory: string; client: any }): H
       if (userMessage.toLowerCase().includes("execute the plan") || 
           userMessage.toLowerCase().includes("let's implement") ||
           userMessage.toLowerCase().includes("continue")) {
+        console.log('[Intent Gate] Skip keyword detected, bypassing');
         return;
       }
 
       const projectContext = loadProjectContext(ctx.directory);
-      const sessionConfig = getSessionConfiguration();
+      const sessionConfig = getSessionConfiguration(sessionID);
 
       if (!sessionConfig) {
+        console.log('[Intent Gate] No session config found, skipping (Scenario Detector may not have run yet)');
         return;
       }
+
+      console.log('[Intent Gate] Session config:', sessionConfig);
 
       const analysis = await analyzeIntent(userMessage, projectContext, ctx.client);
 
+      const currentRound = clarificationRounds.get(sessionID) ?? 0;
+
       if (analysis.confidence >= sessionConfig.confidenceThreshold) {
-        clarificationRound = 0;
+        console.log('[Intent Gate] Confidence sufficient, clearing clarification rounds');
+        clarificationRounds.set(sessionID, 0);
         return;
       }
 
-      if (clarificationRound >= MAX_CLARIFICATION_ROUNDS) {
+      if (currentRound >= MAX_CLARIFICATION_ROUNDS) {
         parts.push({
           type: "text",
           text: `\n\n---\n\n⚠️ **Proceeding with Assumptions**\n\nAfter ${MAX_CLARIFICATION_ROUNDS} rounds of clarification, I'll proceed with my best understanding. I've noted the following assumptions in the plan:\n\n${analysis.ambiguities.map((a) => `- ${a}`).join("\n")}\n\nIf any of these assumptions are wrong, please let me know and I'll adjust.`,
         });
-        clarificationRound = 0;
+        clarificationRounds.set(sessionID, 0);
         return;
       }
 
-      clarificationRound++;
+      clarificationRounds.set(sessionID, currentRound + 1);
 
       const clarificationMessage = buildClarificationMessage(analysis);
       
@@ -139,6 +153,10 @@ function buildClarificationMessage(analysis: any): string {
   return message;
 }
 
-export function resetClarificationRound(): void {
-  clarificationRound = 0;
+export function resetClarificationRound(sessionID?: string): void {
+  if (sessionID) {
+    clarificationRounds.delete(sessionID);
+  } else {
+    clarificationRounds.clear();
+  }
 }

@@ -41,6 +41,14 @@ import {
   createContextInjectorHook,
   createContextInjectorMessagesTransformHook,
 } from "./features/context-injector";
+import {
+  initializeContinuationGovernor,
+  onUserMessage,
+  onSystemOperation,
+  cleanupSession as cleanupContinuationGovernor,
+} from "./features/continuation-governor";
+import { resetScenarioDetection } from "./hooks/scenario-detector";
+import { resetClarificationRound } from "./hooks/intent-gate";
 import { createGoogleAntigravityAuthPlugin } from "./auth/antigravity";
 import {
   discoverUserClaudeSkills,
@@ -79,12 +87,13 @@ import { createModelCacheState, getModelLimit } from "./plugin-state";
 import { createConfigHandler } from "./plugin-handlers";
 
 const OhMyOpenCodePlugin: Plugin = async (ctx) => {
-  // Start background tmux check immediately
   startTmuxCheck();
 
   const pluginConfig = loadPluginConfig(ctx.directory, ctx);
   const disabledHooks = new Set(pluginConfig.disabled_hooks ?? []);
   const isHookEnabled = (hookName: HookName) => !disabledHooks.has(hookName);
+
+  initializeContinuationGovernor();
 
   const modelCacheState = createModelCacheState();
 
@@ -331,6 +340,10 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
     },
 
     "chat.message": async (input, output) => {
+      if (input.sessionID) {
+        onUserMessage(input.sessionID);
+      }
+
       await claudeCodeHooks["chat.message"]?.(input, output);
       await keywordDetector?.["chat.message"]?.(input, output);
       await contextInjector["chat.message"]?.(input, output);
@@ -450,6 +463,9 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
         }
         if (sessionInfo?.id) {
           await skillMcpManager.disconnectSession(sessionInfo.id);
+          cleanupContinuationGovernor(sessionInfo.id);
+          resetScenarioDetection(sessionInfo.id);
+          resetClarificationRound(sessionInfo.id);
         }
       }
 

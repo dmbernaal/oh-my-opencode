@@ -7,6 +7,7 @@ import {
     findNearestMessageWithFields,
     MESSAGE_STORAGE,
 } from "../features/hook-message-injector"
+import { requestContinuation } from "../features/continuation-governor"
 import { log } from "../shared/logger"
 
 const HOOK_NAME = "todo-continuation-enforcer"
@@ -158,7 +159,16 @@ export function createTodoContinuationEnforcer(
       return
     }
 
+    const decision = requestContinuation({
+      hookName: HOOK_NAME,
+      reason: `Incomplete tasks remain (${incompleteCount}/${total})`,
+      sessionID,
+    })
 
+    if (!decision.allowed) {
+      log(`[${HOOK_NAME}] Continuation blocked by Governor: ${decision.blockedReason}`, { sessionID })
+      return
+    }
 
     const hasRunningBgTasks = backgroundManager
       ? backgroundManager.getTasksByParentSession(sessionID).some(t => t.status === "running")

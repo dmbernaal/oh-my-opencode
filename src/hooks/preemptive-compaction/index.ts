@@ -12,6 +12,7 @@ import {
   findNearestMessageWithFields,
   MESSAGE_STORAGE,
 } from "../../features/hook-message-injector"
+import { onSystemOperation } from "../../features/continuation-governor"
 import { log } from "../../shared/logger"
 
 export interface SummarizeContext {
@@ -188,6 +189,7 @@ export function createPreemptiveCompactionHook(
         .catch(() => {})
 
       state.compactionInProgress.delete(sessionID)
+      onSystemOperation(sessionID)
       return
     } catch (err) {
       log("[preemptive-compaction] compaction failed", { sessionID, error: err })

@@ -9,6 +9,7 @@ import {
 } from "./constants"
 import type { RalphLoopState, RalphLoopOptions } from "./types"
 import { getTranscriptPath as getDefaultTranscriptPath } from "../claude-code-hooks/transcript"
+import { requestContinuation } from "../../features/continuation-governor"
 
 export * from "./types"
 export * from "./constants"
@@ -276,6 +277,28 @@ export function createRalphLoopHook(
       const newState = incrementIteration(ctx.directory, stateDir)
       if (!newState) {
         log(`[${HOOK_NAME}] Failed to increment iteration`, { sessionID })
+        return
+      }
+
+      const decision = requestContinuation({
+        hookName: HOOK_NAME,
+        reason: `Ralph loop iteration ${newState.iteration}/${newState.max_iterations}`,
+        sessionID,
+      })
+
+      if (!decision.allowed) {
+        log(`[${HOOK_NAME}] Continuation blocked by Governor: ${decision.blockedReason}`, { sessionID })
+        clearState(ctx.directory, stateDir)
+        await ctx.client.tui
+          .showToast({
+            body: {
+              title: "Ralph Loop Paused",
+              message: decision.blockedReason ?? "Continuation blocked",
+              variant: "warning",
+              duration: 5000,
+            },
+          })
+          .catch(() => {})
         return
       }
 

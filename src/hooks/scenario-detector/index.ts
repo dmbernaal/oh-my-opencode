@@ -3,29 +3,42 @@ import * as path from "path";
 import type { Hooks } from "@opencode-ai/plugin";
 import { detectScenario, parseUserOverride, SCENARIOS, type SessionConfiguration } from "./signatures";
 
-let sessionConfiguration: SessionConfiguration | null = null;
-let hasDetectedScenario = false;
+const sessionConfigurations = new Map<string, SessionConfiguration>();
+const detectedSessions = new Set<string>();
 
-export function getSessionConfiguration(): SessionConfiguration | null {
-  return sessionConfiguration;
+export function getSessionConfiguration(sessionID?: string): SessionConfiguration | null {
+  if (!sessionID) return null;
+  return sessionConfigurations.get(sessionID) ?? null;
 }
 
-export function setSessionConfiguration(config: SessionConfiguration): void {
-  sessionConfiguration = config;
+export function setSessionConfiguration(sessionID: string, config: SessionConfiguration): void {
+  sessionConfigurations.set(sessionID, config);
 }
 
-export function resetScenarioDetection(): void {
-  hasDetectedScenario = false;
-  sessionConfiguration = null;
+export function resetScenarioDetection(sessionID?: string): void {
+  if (sessionID) {
+    detectedSessions.delete(sessionID);
+    sessionConfigurations.delete(sessionID);
+  } else {
+    detectedSessions.clear();
+    sessionConfigurations.clear();
+  }
 }
 
 export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks => {
   return {
     "chat.message": async (input: any, output: any) => {
-      console.log('[Scenario Detector] Hook triggered');
+      const sessionID = (input as { sessionID?: string }).sessionID;
       
-      if (hasDetectedScenario) {
-        console.log('[Scenario Detector] Already detected, skipping');
+      console.log('[Scenario Detector] Hook triggered', { sessionID });
+      
+      if (!sessionID) {
+        console.log('[Scenario Detector] No sessionID, skipping');
+        return;
+      }
+      
+      if (detectedSessions.has(sessionID)) {
+        console.log('[Scenario Detector] Already detected for this session, skipping');
         return;
       }
 
@@ -48,8 +61,8 @@ export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks =>
       if (userOverride) {
         const scenario = SCENARIOS.find((s) => s.mode === userOverride);
         if (scenario) {
-          applyScenario(ctx.directory, scenario);
-          hasDetectedScenario = true;
+          applyScenario(ctx.directory, sessionID, scenario);
+          detectedSessions.add(sessionID);
           return;
         }
       }
@@ -59,14 +72,14 @@ export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks =>
 
       if (detectedScenario) {
         console.log('[Scenario Detector] Detected mode:', detectedScenario.mode);
-        applyScenario(ctx.directory, detectedScenario);
-        hasDetectedScenario = true;
+        applyScenario(ctx.directory, sessionID, detectedScenario);
+        detectedSessions.add(sessionID);
       } else {
         console.log('[Scenario Detector] No match, using default: feature');
         const defaultScenario = SCENARIOS.find((s) => s.mode === "feature");
         if (defaultScenario) {
-          applyScenario(ctx.directory, defaultScenario);
-          hasDetectedScenario = true;
+          applyScenario(ctx.directory, sessionID, defaultScenario);
+          detectedSessions.add(sessionID);
         }
       }
     },
@@ -87,7 +100,7 @@ function analyzeProjectContext(directory: string): { isEmpty: boolean; hasPackag
   }
 }
 
-function applyScenario(directory: string, scenario: any): void {
+function applyScenario(directory: string, sessionID: string, scenario: any): void {
   console.log('[Scenario Detector] Applying scenario:', scenario.mode);
   
   const config: SessionConfiguration = {
@@ -98,7 +111,7 @@ function applyScenario(directory: string, scenario: any): void {
     requiresArchitecture: scenario.requiresArchitecture,
   };
 
-  setSessionConfiguration(config);
+  setSessionConfiguration(sessionID, config);
   console.log('[Scenario Detector] Session config set:', config);
 
   const constraintsPath = path.join(directory, "docs", "agent", "constraints.md");
