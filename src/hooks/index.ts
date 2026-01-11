@@ -36,3 +36,4 @@ export { createIntentGateHook } from "./intent-gate";
 export { createVerificationEnforcerHook } from "./verification-enforcer";
 
 
+export { createPrometheusInitHook } from "./prometheus-init";

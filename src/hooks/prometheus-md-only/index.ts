@@ -88,7 +88,7 @@ export function createPrometheusMdOnlyHook(_ctx: PluginInput) {
         return
       }
 
-      const filePath = (output.args.filePath ?? output.args.path ?? output.args.file) as string | undefined
+      const filePath = (output.args?.filePath ?? output.args?.path ?? output.args?.file) as string | undefined
       if (!filePath) {
         return
       }

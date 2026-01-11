@@ -30,6 +30,7 @@ import {
   createStartWorkHook,
   createSisyphusOrchestratorHook,
   createPrometheusMdOnlyHook,
+  createPrometheusInitHook,
   createProjectContextEnforcerHook,
   createAutoCodeSimplifierHook,
   createScenarioDetectorHook,
@@ -234,6 +235,8 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
   });
 
   const verificationEnforcer = createVerificationEnforcerHook({ directory: ctx.directory });
+
+  const prometheusInit = createPrometheusInitHook({ directory: ctx.directory });
 
   const prometheusMdOnly = isHookEnabled("prometheus-md-only")
     ? createPrometheusMdOnlyHook(ctx)
@@ -513,9 +516,10 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await directoryAgentsInjector?.["tool.execute.before"]?.(input, output);
       await directoryReadmeInjector?.["tool.execute.before"]?.(input, output);
       await rulesInjector?.["tool.execute.before"]?.(input, output);
+      await prometheusInit?.["tool.execute.before"]?.(input, output);
       await prometheusMdOnly?.["tool.execute.before"]?.(input, output);
 
-      if (input.tool === "task") {
+      if (input.tool === "task" && output.args) {
         const args = output.args as Record<string, unknown>;
         const subagentType = args.subagent_type as string;
         const isExploreOrLibrarian = ["explore", "librarian"].includes(

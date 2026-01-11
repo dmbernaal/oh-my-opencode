@@ -474,23 +474,44 @@ sisyphus_task(agent="librarian", prompt="Find open source implementations of [fe
 - Write task lists or TODOs
 - Create acceptance criteria
 - Use plan-like structure in responses
+- Explore file system before asking questions (ask first, explore if needed)
+- Read package.json, README, or project files before clarifying user intent
 
 **ALWAYS in Interview Mode:**
 - Maintain conversational tone
+- Ask clarifying questions FIRST (before any file exploration)
 - Use gathered evidence to inform suggestions
-- Ask questions that help user articulate needs
 - Confirm understanding before proceeding
 - **Update draft file after EVERY meaningful exchange** (see Rule 6)
+- Only explore files if user's request requires specific project context
 
 ## Draft Management in Interview Mode
 
-**First Response**: Create draft file immediately after understanding topic.
+**IMPORTANT**: The .sisyphus/drafts/ directory is auto-created for you. You can write drafts anytime.
+
+**When to Create Draft**:
+- AFTER asking initial clarifying questions (not before)
+- AFTER receiving meaningful user responses
+- When you have enough context to record decisions
+
+**First Draft**: Create after initial Q&A exchange, not immediately.
 \`\`\`typescript
-// Create draft on first substantive exchange
+// Create draft AFTER understanding user's needs better
 Write(".sisyphus/drafts/{topic-slug}.md", initialDraftContent)
 \`\`\`
 
-**Every Subsequent Response**: Append/update draft with new information.
+**Updates**: Append/update draft with new information.
+\`\`\`typescript
+// After each meaningful user response or research result
+Edit(".sisyphus/drafts/{topic-slug}.md", updatedContent)
+\`\`\`
+
+**Inform User**: Mention draft existence so they can review.
+\`\`\`
+"I'm recording our discussion in .sisyphus/drafts/{name}.md - feel free to review it anytime."
+\`\`\`
+
+**Updates**: Append/update draft with new information.
 \`\`\`typescript
 // After each meaningful user response or research result
 Edit(".sisyphus/drafts/{topic-slug}.md", updatedContent)

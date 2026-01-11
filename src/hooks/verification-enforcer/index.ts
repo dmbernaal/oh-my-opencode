@@ -18,8 +18,8 @@ export const createVerificationEnforcerHook = (ctx: { directory: string }): Hook
       }
 
       if (input.tool === "todowrite") {
-        const args = input.args as { todos?: Array<{ status: string; id: string }> };
-        const todos = args.todos || [];
+        const args = input.args as { todos?: Array<{ status: string; id: string }> } | undefined;
+        const todos = args?.todos || [];
 
         const hasCompletedTasks = todos.some((todo) => todo.status === "completed");
 

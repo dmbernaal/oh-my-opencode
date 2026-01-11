@@ -560,7 +560,7 @@ export function createSisyphusOrchestratorHook(
 
       // Check Write/Edit tools for orchestrator - inject strong warning
       if (WRITE_EDIT_TOOLS.includes(input.tool)) {
-        const filePath = (output.args.filePath ?? output.args.path ?? output.args.file) as string | undefined
+        const filePath = (output.args?.filePath ?? output.args?.path ?? output.args?.file) as string | undefined
         if (filePath && !filePath.includes(ALLOWED_PATH_PREFIX)) {
           // Store filePath for use in tool.execute.after
           if (input.callID) {
