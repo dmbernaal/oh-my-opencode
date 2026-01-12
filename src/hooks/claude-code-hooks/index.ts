@@ -34,6 +34,8 @@ const sessionFirstMessageProcessed = new Set<string>()
 const sessionErrorState = new Map<string, { hasError: boolean; errorMessage?: string }>()
 const sessionInterruptState = new Map<string, { interrupted: boolean }>()
 
+const SISYPHUS_ONLY_AGENTS = ["Sisyphus", "build"]
+
 export function createClaudeCodeHooksHook(
   ctx: PluginInput,
   config: PluginConfig = {},
@@ -143,7 +145,8 @@ export function createClaudeCodeHooksHook(
         }
 
         const keywordMessages: string[] = []
-        if (!config.keywordDetectorDisabled) {
+        const isSisyphusAgent = input.agent && SISYPHUS_ONLY_AGENTS.includes(input.agent)
+        if (!config.keywordDetectorDisabled && isSisyphusAgent) {
           const detectedKeywords = detectKeywordsWithType(removeCodeBlocks(prompt), input.agent)
           keywordMessages.push(...detectedKeywords.map((k) => k.message))
 

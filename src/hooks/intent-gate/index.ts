@@ -9,12 +9,23 @@ import { log } from "../../shared/logger";
 const clarificationRounds = new Map<string, number>();
 const MAX_CLARIFICATION_ROUNDS = 3;
 
+const SISYPHUS_ONLY_AGENTS = [
+  "Sisyphus",
+  "build",
+];
+
 export const createIntentGateHook = (ctx: { directory: string; client: any }): Hooks => {
   return {
     "chat.message": async (input: any, output: any) => {
       const sessionID = (input as { sessionID?: string }).sessionID;
+      const agentName = (input as { agent?: string }).agent;
       
       if (!sessionID) {
+        return;
+      }
+
+      if (!agentName || !SISYPHUS_ONLY_AGENTS.includes(agentName)) {
+        log('[Intent Gate] Skipping - only runs for Sisyphus/build agents:', agentName);
         return;
       }
       

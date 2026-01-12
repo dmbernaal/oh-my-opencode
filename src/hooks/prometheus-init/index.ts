@@ -5,13 +5,14 @@ import { findNearestMessageWithFields, MESSAGE_STORAGE } from "../../features/ho
 import { log } from "../../shared/logger"
 
 const HOOK_NAME = "prometheus-init"
-const PROMETHEUS_AGENTS = ["Prometheus (Planner)"]
+const PLANNING_AGENTS = ["Prometheus (Planner)", "Athena (Researcher)"]
 
 const SISYPHUS_DIRS = [
   ".sisyphus",
   ".sisyphus/drafts",
   ".sisyphus/plans",
   ".sisyphus/notepads",
+  ".sisyphus/research",
 ]
 
 function getAgentFromSession(sessionID: string): string | undefined {
@@ -43,13 +44,13 @@ export function createPrometheusInitHook(ctx: { directory: string }) {
       if (initialized) return
 
       const agentName = getAgentFromSession(input.sessionID)
-      if (!agentName || !PROMETHEUS_AGENTS.includes(agentName)) {
+      if (!agentName || !PLANNING_AGENTS.includes(agentName)) {
         return
       }
 
       ensureSisyphusStructure(ctx.directory)
       initialized = true
-      log(`[${HOOK_NAME}] Initialized .sisyphus structure for Prometheus session`)
+      log(`[${HOOK_NAME}] Initialized .sisyphus structure for ${agentName} session`)
     },
   } satisfies Hooks
 }

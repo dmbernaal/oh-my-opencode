@@ -8,6 +8,11 @@ import { log } from "../../shared/logger";
 const sessionConfigurations = new Map<string, SessionConfiguration>();
 const detectedSessions = new Set<string>();
 
+const SISYPHUS_ONLY_AGENTS = [
+  "Sisyphus",
+  "build",
+];
+
 export function getSessionConfiguration(sessionID?: string): SessionConfiguration | null {
   if (!sessionID) return null;
   return sessionConfigurations.get(sessionID) ?? null;
@@ -51,6 +56,13 @@ export const createScenarioDetectorHook = (ctx: { directory: string }): Hooks =>
         .join(" ");
 
       if (!userMessage || userMessage.trim().length === 0) {
+        return;
+      }
+
+      const agentName = (input as { agent?: string }).agent;
+      if (!agentName || !SISYPHUS_ONLY_AGENTS.includes(agentName)) {
+        log('[Scenario Detector] Skipping - only runs for Sisyphus/build agents:', agentName);
+        detectedSessions.add(sessionID);
         return;
       }
 

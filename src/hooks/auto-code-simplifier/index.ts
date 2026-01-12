@@ -32,8 +32,8 @@ export const createAutoCodeSimplifierHook = (
           input.tool
         )
       ) {
-        const filePath = (input.args as { filePath?: string; path?: string }).filePath || 
-                        (input.args as { filePath?: string; path?: string }).path;
+        const args = input.args as { filePath?: string; path?: string } | undefined;
+        const filePath = args?.filePath || args?.path;
         
         if (filePath && typeof filePath === "string") {
           dirtyFiles.add(filePath);

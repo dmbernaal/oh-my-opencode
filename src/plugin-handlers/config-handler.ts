@@ -24,6 +24,7 @@ import type { OhMyOpenCodeConfig } from "../config";
 import { log } from "../shared";
 import { migrateAgentConfig } from "../shared/permission-compat";
 import { PROMETHEUS_SYSTEM_PROMPT, PROMETHEUS_PERMISSION } from "../agents/prometheus-prompt";
+import { createAthenaAgent } from "../agents/athena";
 import type { ModelCacheState } from "../plugin-state";
 
 export interface ConfigHandlerDeps {
@@ -187,6 +188,12 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
         agentConfig["Prometheus (Planner)"] = prometheusOverride
           ? { ...prometheusBase, ...prometheusOverride }
           : prometheusBase;
+
+        const athenaOverride = pluginConfig.agents?.["Athena (Researcher)"];
+        const athenaBase = createAthenaAgent(defaultModel ?? "anthropic/claude-sonnet-4-5");
+        agentConfig["Athena (Researcher)"] = athenaOverride
+          ? { ...athenaBase, ...athenaOverride }
+          : athenaBase;
       }
 
     const filteredConfigAgents = configAgent
