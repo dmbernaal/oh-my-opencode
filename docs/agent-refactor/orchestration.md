@@ -1,7 +1,7 @@
 # Orchestration: Agent Coordination & Handoffs
 
 **Purpose**: Define how Athena, Prometheus, and Sisyphus coordinate  
-**Status**: NEEDS IMPLEMENTATION
+**Status**: PARTIALLY IMPLEMENTED (Athena complete, Prometheus/Sisyphus orchestration pending)
 
 ---
 
@@ -167,38 +167,53 @@ function detectInitialAgent(
 
 ### 2. Athena → Prometheus (Research Complete)
 
-#### Handoff Signal
+**STATUS: IMPLEMENTED**
 
-Athena emits when research is complete and user approves:
+Athena's handoff is implemented via natural language and file-based state transfer.
 
-```markdown
-<athena-handoff>
-status: complete
-research_document: .sisyphus/research/{topic}-research.md
-user_approved_direction: {direction description}
-recommended_next: Prometheus
-</athena-handoff>
+#### Research Document Output
+
+When research completes, Athena saves to:
 ```
+.sisyphus/research/{topic-slug}-research.md
+```
+
+This document follows a strict template (see `athena.md` for full structure) containing:
+- User requirements (target users, core problem, platform, scope, constraints)
+- Synthesized findings with consensus levels
+- Conflicts requiring user decisions
+- Research gaps
+- Recommended approach (tech stack, architecture, key decisions, open decisions)
+- Research metadata
 
 #### Natural Language Handoff
 
 ```
-Athena: "I've completed my research and saved findings to:
+Athena: "I've saved my research to:
 .sisyphus/research/social-calculator-research.md
 
-Based on my research, I recommend:
-- Polling for real-time (serverless-compatible)
-- In-memory storage for MVP
-- Basic calculator operations
-
-You approved this direction. ✅
-
-**Next Step**: Switch to **Prometheus (Planner)** mode.
-Prometheus will read my research and create:
+Time to create the detailed plan. Switch to **Prometheus (Planner)** mode.
+Prometheus will use my research to create:
 - Product Requirements Document
 - System Architecture
-- Implementation Tasks"
+- Implementation tasks"
 ```
+
+**CRITICAL:** Athena STOPS after this message. It does NOT continue to planning or implementation.
+
+#### Profile Persistence
+
+User profile is persisted to `.sisyphus/session/user-profile.json` with 24-hour TTL:
+```typescript
+interface StoredProfile {
+  profile: UserProfile      // expertise, vocabulary_level, focus, signals
+  scenario: ScenarioType    // greenfield, feature, exploration, tech_decision
+  created_at: string        // ISO timestamp
+  session_id: string
+}
+```
+
+This allows Prometheus to inherit user expertise context without re-classification.
 
 #### Prometheus Receives
 
@@ -304,10 +319,14 @@ if (planPath) {
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         Athena                               │
+│                         Athena (IMPLEMENTED)                 │
 │                                                              │
-│  Reads: Nothing (starts fresh)                              │
-│  Writes: .sisyphus/research/{topic}-research.md             │
+│  Reads:                                                     │
+│    - .sisyphus/session/user-profile.json (via hook)         │
+│    - Existing .sisyphus/research/*.md (if continuing)       │
+│  Writes:                                                    │
+│    - .sisyphus/session/user-profile.json                    │
+│    - .sisyphus/research/{topic}-research.md                 │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
@@ -375,16 +394,28 @@ export function detectPrometheusHandoff(response: string): HandoffSignal | null;
 
 ### Phase 2: Agent Startup Logic
 
-#### 2.1 Athena Startup
+#### 2.1 Athena Startup (IMPLEMENTED)
 
-**File**: `src/agents/athena.ts` (in prompt)
+**Files**: 
+- `src/agents/athena.ts` - Agent definition and system prompt
+- `src/hooks/athena-profile-loader/index.ts` - Profile injection hook
 
-```
-On startup:
-1. Check if .sisyphus/research/ has existing research
-2. If exists: "I see previous research. Would you like to continue or start fresh?"
-3. If not: Start fresh research process
-```
+**Behavior:**
+
+1. **Profile Loading Hook** runs before Athena sees the message:
+   - Checks `.sisyphus/session/user-profile.json` for existing profile (24h TTL)
+   - If fresh profile exists: Injects `<user_profile source="cached">` block
+   - If no profile: Spawns lightweight `explore` agent for classification
+   - If classification succeeds: Injects `<user_profile source="auto-classified">` block
+   - If classification fails: Injects "[SYSTEM: Classification failed...]" for manual Phase 1
+
+2. **Athena receives augmented message** with profile context
+   - Skips Phase 1 if profile present
+   - Proceeds directly to Phase 2 (Research Planning)
+
+3. **Research continuation** is handled naturally by Athena prompt:
+   - Can read existing `.sisyphus/research/` documents
+   - User can ask to continue or start fresh
 
 #### 2.2 Prometheus Startup
 
@@ -569,13 +600,16 @@ Where `topic-slug` is kebab-case of the topic (e.g., "social-calculator").
 
 Orchestration is complete when:
 
-1. ✅ Athena → Prometheus handoff works (natural language)
-2. ✅ Prometheus → Sisyphus handoff works (no `/start-work`)
-3. ✅ State is shared via .sisyphus/ files
-4. ✅ Each agent reads prior work on startup
-5. ✅ Users can enter at any point
-6. ✅ Experienced users can skip phases
-7. ✅ Clear guidance shown when agent mismatch
+1. ✅ Athena → Prometheus handoff works (natural language) - **IMPLEMENTED**
+   - Research document saved to `.sisyphus/research/{topic}-research.md`
+   - Profile persisted to `.sisyphus/session/user-profile.json`
+   - Clear handoff message directs to Prometheus
+2. ⏳ Prometheus → Sisyphus handoff works (no `/start-work`) - **PENDING**
+3. ✅ State is shared via .sisyphus/ files - **IMPLEMENTED for Athena**
+4. ⏳ Each agent reads prior work on startup - **ATHENA IMPLEMENTED, others pending**
+5. ✅ Users can enter at any point - **DESIGN COMPLETE**
+6. ✅ Experienced users can skip phases - **DESIGN COMPLETE**
+7. ⏳ Clear guidance shown when agent mismatch - **PENDING**
 
 ---
 

@@ -18,6 +18,7 @@ import { DEFAULT_CATEGORIES } from "../tools/sisyphus-task/constants"
 import { resolveMultipleSkills } from "../features/opencode-skill-loader/skill-content"
 
 import { createCodeSimplifierAgent, CODE_SIMPLIFIER_PROMPT_METADATA } from "./code-simplifier"
+import { createResearchLibrarianAgent } from "./research-librarian"
 
 type AgentSource = AgentFactory | AgentConfig
 
@@ -26,6 +27,7 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   "Athena (Researcher)": createAthenaAgent,
   oracle: createOracleAgent,
   librarian: createLibrarianAgent,
+  "research-librarian": createResearchLibrarianAgent,
   explore: createExploreAgent,
   "frontend-ui-ux-engineer": createFrontendUiUxEngineerAgent,
   "document-writer": createDocumentWriterAgent,

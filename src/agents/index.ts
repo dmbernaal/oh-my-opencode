@@ -13,12 +13,14 @@ import { orchestratorSisyphusAgent } from "./orchestrator-sisyphus"
 import { momusAgent } from "./momus"
 
 import { codeSimplifierAgent } from "./code-simplifier"
+import { researchLibrarianAgent } from "./research-librarian"
 
 export const builtinAgents: Record<string, AgentConfig> = {
   Sisyphus: sisyphusAgent,
   "Athena (Researcher)": athenaAgent,
   oracle: oracleAgent,
   librarian: librarianAgent,
+  "research-librarian": researchLibrarianAgent,
   explore: exploreAgent,
   "frontend-ui-ux-engineer": frontendUiUxEngineerAgent,
   "document-writer": documentWriterAgent,

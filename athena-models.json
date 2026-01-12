@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Athena Research Pipeline Model Configuration - Quick fix for model selection",
+  
+  "models": {
+    "profile_classifier": {
+      "comment": "Used for lightweight user profile classification",
+      "agent": "multimodal-looker",
+      "model": {
+        "providerID": "opencode",
+        "modelID": "glm-4.7-free"
+      },
+      "alternatives": [
+        { "providerID": "google", "modelID": "gemini-3-flash" },
+        { "providerID": "opencode", "modelID": "grok-code" }
+      ]
+    },
+    
+    "research_librarian": {
+      "comment": "Used for deep research tasks via background agents",
+      "agent": "research-librarian",
+      "model": {
+        "providerID": "opencode",
+        "modelID": "glm-4.7-free"
+      },
+      "alternatives": [
+        { "providerID": "google", "modelID": "gemini-3-flash" },
+        { "providerID": "anthropic", "modelID": "claude-sonnet-4-5" }
+      ]
+    },
+    
+    "explore": {
+      "comment": "Used for fast codebase exploration",
+      "agent": "explore",
+      "model": {
+        "providerID": "opencode",
+        "modelID": "grok-code"
+      },
+      "alternatives": [
+        { "providerID": "opencode", "modelID": "glm-4.7-free" },
+        { "providerID": "google", "modelID": "gemini-3-flash" }
+      ]
+    },
+    
+    "athena_main": {
+      "comment": "Main Athena researcher agent",
+      "agent": "Athena (Researcher)",
+      "model": {
+        "providerID": "opencode",
+        "modelID": "glm-4.7-free"
+      },
+      "alternatives": [
+        { "providerID": "anthropic", "modelID": "claude-sonnet-4-5" },
+        { "providerID": "google", "modelID": "gemini-3-pro-preview" }
+      ]
+    }
+  },
+  
+  "notes": {
+    "opencode_zen_models": [
+      "opencode/glm-4.7-free - Universal fallback, 355B MoE model with 32B active params",
+      "opencode/grok-code - Fast exploration, optimized for coding agents"
+    ],
+    "google_antigravity_models": [
+      "google/gemini-3-flash - Requires Antigravity OAuth setup",
+      "google/gemini-3-pro-preview - Requires Antigravity OAuth setup"
+    ],
+    "anthropic_models": [
+      "anthropic/claude-sonnet-4-5 - Requires Claude Pro/Max subscription",
+      "anthropic/claude-opus-4-5 - Requires Claude Pro/Max subscription"
+    ]
+  }
+}

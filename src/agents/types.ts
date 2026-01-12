@@ -61,6 +61,7 @@ export type BuiltinAgentName =
   | "Athena (Researcher)"
   | "oracle"
   | "librarian"
+  | "research-librarian"
   | "explore"
   | "frontend-ui-ux-engineer"
   | "document-writer"

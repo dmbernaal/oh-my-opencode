@@ -13,6 +13,7 @@ const SISYPHUS_DIRS = [
   ".sisyphus/plans",
   ".sisyphus/notepads",
   ".sisyphus/research",
+  ".sisyphus/session",
 ]
 
 function getAgentFromSession(sessionID: string): string | undefined {

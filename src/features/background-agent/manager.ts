@@ -123,6 +123,7 @@ export class BackgroundManager {
       path: { id: sessionID },
       body: {
         agent: input.agent,
+        model: input.model,
         system: input.skillContent,
         tools: {
           task: false,
