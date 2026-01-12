@@ -12,7 +12,9 @@ Athena is a sophisticated research agent responsible for the first phase of the 
 
 **Core Principle**: No agent should plan or build until the problem is thoroughly understood.
 
-**Model**: `anthropic/claude-sonnet-4-5` (with 16k thinking budget)
+**Model**: `anthropic/claude-sonnet-4-5` (with 16k thinking budget)  
+**Profile Classifier Model**: `opencode/glm-4.7-free` (via `multimodal-looker` agent)  
+**Research Librarian Model**: `opencode/glm-4.7-free`
 
 ---
 
@@ -39,12 +41,13 @@ Classify user expertise and scenario type to adapt communication style and resea
 
 ### Auto-Classification (Pre-computed)
 
-User profiling is typically **pre-computed by a lightweight model** (explore agent) before Athena responds. This is handled by the `athena-profile-loader` hook.
+User profiling is **pre-computed by a lightweight model** (`multimodal-looker` agent with `opencode/glm-4.7-free`) before Athena responds. This is handled by the `athena-profile-loader` hook.
 
 When a user message arrives, the hook:
 1. Checks for an existing profile in `.sisyphus/session/user-profile.json` (24-hour TTL)
-2. If no profile exists, spawns the explore agent to classify the user
+2. If no profile exists, creates a classification session with `multimodal-looker` agent using `opencode/glm-4.7-free` model
 3. Injects a `<user_profile>` block into the message before Athena sees it
+4. **NEW**: Also injects "Phase 1.5: Gap Analysis" instructions requiring Athena to ask clarifying questions
 
 **Profile Structure:**
 ```typescript
@@ -91,6 +94,51 @@ Athena adjusts research focus based on scenario:
 
 ### Silent Upgrade Rule
 If user responds with technical jargon that contradicts initial classification, silently upgrade expertise level without commenting on it.
+
+---
+
+## Phase 1.5: Gap Analysis (MANDATORY)
+
+**NEW**: After profile classification but BEFORE research planning, Athena MUST ask clarifying questions about project gaps.
+
+### Purpose
+Even with high-confidence profile classification, the user's initial message rarely contains enough information about the PROJECT (platform, scope, constraints) to conduct effective research.
+
+### Mandatory Behavior
+
+1. **Analyze the user's message** for information gaps:
+   - Target platform (web/mobile/desktop)?
+   - Scope (MVP vs full product)?
+   - Scale expectations?
+   - Timeline/urgency?
+   - Tech preferences or constraints?
+
+2. **Ask 1-3 clarifying questions** (based on expertise level):
+   - Beginner: 3 questions max
+   - Intermediate: 2 questions max
+   - Expert: 1 question max
+
+3. **WAIT for user response** before proceeding to Phase 2
+
+### Question Style Adaptation
+
+| Expertise | Style | Example |
+|-----------|-------|---------|
+| Beginner | Friendly, explain options | "Should this work on phones, computers, or both?" |
+| Intermediate | Direct with context | "Web app, mobile, or both?" |
+| Expert | Terse | "Platform target? MVP or production scope?" |
+
+### Hook Implementation
+
+The `athena-profile-loader` hook injects Phase 1.5 instructions:
+```
+## PHASE 1.5: GAP ANALYSIS (MANDATORY BEFORE RESEARCH)
+
+Before proceeding to Phase 2 Research Planning, you MUST:
+1. Analyze the user's message for information gaps
+2. Ask 1-{maxQuestions} brief clarifying questions
+3. WAIT for user response before proceeding to Phase 2
+```
 
 ---
 
@@ -168,7 +216,7 @@ The `plan-validator.ts` module detects overlapping queries using:
 Queries run in **parallel batches**, not sequentially:
 
 **Batch 1 (MUST - Blocking):**
-1. Dispatch ALL must queries simultaneously using `background_task`
+1. Dispatch ALL must queries simultaneously using `sisyphus_task` with `subagent_type="research-librarian"` and `run_in_background=true`
 2. Wait for ALL to complete before proceeding
 3. If any MUST query fails, reformulate and retry (max 2 retries)
 
@@ -186,6 +234,23 @@ Queries run in **parallel batches**, not sequentially:
 **IMPORTANT:** Athena uses the specialized `research-librarian` agent, NOT the generic `librarian`.
 
 The `research-librarian` is optimized for broad research (best practices, comparisons, market analysis) with category-specific search strategies. The generic `librarian` is for code lookup and GitHub permalinks.
+
+**Model**: `opencode/glm-4.7-free` (free, no auth required)
+
+**Dispatch Pattern**:
+```
+sisyphus_task(
+  subagent_type="research-librarian",
+  description="[q1] {short desc}",
+  prompt="Research Query ID: q1...",
+  run_in_background=true
+)
+```
+
+**DO NOT USE**:
+- ❌ `background_task` - Does not exist
+- ❌ `call_omo_agent` - Does not support research-librarian
+- ❌ Generic `librarian` - Wrong agent for research
 
 ### In-Flight Adjustments
 
@@ -438,17 +503,22 @@ DECISION: DONE / NOT DONE - [reason]
 
 ## Implementation Files
 
-| File | Purpose | Lines |
+| File | Purpose | Notes |
 |------|---------|-------|
-| `src/agents/athena.ts` | Agent definition and system prompt | 964 |
-| `src/agents/research-librarian.ts` | Specialized research subagent | 233 |
-| `src/features/athena-research/types.ts` | All type definitions and constants | 458 |
-| `src/features/athena-research/profile-classifier.ts` | Lightweight user classification | 197 |
-| `src/features/athena-research/profile-persistence.ts` | Profile storage (24h TTL) | 69 |
-| `src/features/athena-research/plan-validator.ts` | Query overlap detection | 362 |
-| `src/features/athena-research/research-executor.ts` | Execution state management | 793 |
-| `src/features/athena-research/document-generator.ts` | Markdown document production | 297 |
-| `src/hooks/athena-profile-loader/index.ts` | Profile injection hook | 167 |
+| `src/agents/athena.ts` | Agent definition and system prompt | ~1028 lines, includes ATHENA_SYSTEM_PROMPT |
+| `src/agents/research-librarian.ts` | Specialized research subagent | Uses `opencode/glm-4.7-free` model |
+| `src/features/athena-research/types.ts` | Type definitions | UserProfile, ScenarioType, etc. |
+| `src/features/athena-research/profile-classifier.ts` | Lightweight user classification | Uses `multimodal-looker` + `opencode/glm-4.7-free` |
+| `src/features/athena-research/index.ts` | Feature barrel export | Exports all Athena research functions |
+| `src/hooks/athena-profile-loader/index.ts` | Profile injection hook | Handles Phase 1 + 1.5 injection |
+| `src/features/background-agent/manager.ts` | Background task management | Used by sisyphus_task for research dispatch |
+
+### Model Configuration
+
+Models are configured in the source files. For quick changes, see `athena-models.json` in project root:
+- Profile classifier: `opencode/glm-4.7-free`
+- Research librarian: `opencode/glm-4.7-free`
+- Athena main: `anthropic/claude-sonnet-4-5` (configurable)
 
 ---
 
@@ -459,18 +529,20 @@ Athena has restricted tool access to enforce research-only behavior:
 ```typescript
 tools: {
   edit: false,              // Cannot edit files
-  background_task: true,    // Dispatch research-librarian agents
   background_output: true,  // Collect research results
-  call_omo_agent: true,     // Spawn explore agents
+  background_cancel: true,  // Cancel background tasks
+  call_omo_agent: false,    // NOT used - use sisyphus_task instead
+  sisyphus_task: true,      // Dispatch research-librarian agents
   write: true,              // Save research documents
   read: true,               // Read existing files
   glob: true,               // Find files
   grep: true,               // Search content
   bash: false,              // No shell access
   task: false,              // No Task tool
-  sisyphus_task: false,     // No Sisyphus task delegation
 }
 ```
+
+**Key Change**: Athena uses `sisyphus_task` with `subagent_type="research-librarian"` for research dispatch, NOT `background_task` or `call_omo_agent`.
 
 ---
 
@@ -505,24 +577,23 @@ When research is complete and user approves:
 ```
 User: "I want to build a social calculator app"
 
-[Profile classification runs in background]
-[<user_profile> injected: expertise=intermediate, scenario=greenfield]
+[Profile classification runs via multimodal-looker + opencode/glm-4.7-free]
+[Hook injects: <user_profile> expertise=beginner, scenario=greenfield]
+[Hook injects: Phase 1.5 Gap Analysis instructions]
 
-Athena: "Interesting! A social calculator where users can see each other's 
-calculations in real-time. 
+Athena: "A social calculator where everyone can see calculations in real-time - 
+that's a fun idea!
 
-Based on what you've shared:
-✓ Target user: general users wanting social math
-✓ Core problem: social/shared calculation experience
-? Scope: Are you building an MVP to test the idea, or production-ready?
-? Platform: Web-only, or mobile apps too?
+Before I dive into research, a couple quick questions:
 
-I'll assume web-first since you didn't mention mobile—let me know if wrong."
+1. Should this work on phones, computers, or both?
+2. Are you looking to build a simple first version to test the idea, or the 
+   full thing right away?"
 
 User: "Web for now, just want to validate the idea"
 
-Athena: "Got it! Let me research the best approaches for a real-time social 
-feed MVP on web...
+Athena: "Perfect! Web-first MVP to validate. Let me research the best 
+approaches...
 
 📋 Research plan created:
    • 6 research queries across 4 domains
@@ -530,32 +601,38 @@ feed MVP on web...
    • Complexity: MODERATE
 
 📤 Dispatching MUST queries:
-   [q1] Real-time feed patterns for web apps 2025
+   [q1] Real-time feed patterns for web apps
    [q2] Calculator UX best practices
-   [q3] WebSocket vs SSE vs Polling comparison
+   [q3] WebSocket vs SSE comparison
+
+[Uses sisyphus_task with subagent_type="research-librarian" for each query]
 
 ⏳ Waiting for results...
 
-[Research completes]
+[BACKGROUND TASK COMPLETED] Task "[q3] WebSocket vs SSE comparison" finished in 48s.
+
+✓ [q3] Complete: SSE recommended for this use case
+⏳ [q1] Running...
+⏳ [q2] Running...
+
+[All research completes]
 
 Based on my research, here are your options:
 
 ## Real-Time Approach
-1. **Polling** - Simplest, works serverless ✓ RECOMMENDED for MVP
-2. **SSE** - One-way, simpler than WebSocket
-3. **WebSocket** - True real-time, but needs server
+1. **SSE** - Recommended ✓ (server-to-client only, simpler than WebSocket)
+2. **Polling** - Simplest, works serverless
+3. **WebSocket** - Full duplex, but overkill for this
 
 ## My Recommendation
-For an MVP to validate the idea, **Polling** because:
-- Works with Vercel (serverless)
-- Simplest to implement
-- 2-second delay is fine for validation
-
-I found a great pattern from [Project X] that we could adapt.
+For a web MVP, **SSE (Server-Sent Events)** because:
+- Perfect for one-way feed (server → client)
+- Simpler than WebSocket
+- Auto-reconnects on network issues
 
 Does this direction work for you?"
 
-User: "Yes, let's go with polling"
+User: "Yes, let's go with SSE"
 
 Athena: "I've saved my research to:
 .sisyphus/research/social-calculator-research.md
@@ -566,6 +643,15 @@ Prometheus will use my research to create:
 - System Architecture
 - Implementation tasks"
 ```
+
+**Key Flow:**
+1. Profile classification → `<user_profile>` injected
+2. Phase 1.5 → Athena asks clarifying questions
+3. User answers → Athena proceeds to Phase 2
+4. Research dispatch → `sisyphus_task` with `research-librarian`
+5. Results collected → `background_output`
+6. Synthesis → Research document saved
+7. Handoff → User directed to Prometheus
 
 ---
 
@@ -590,14 +676,17 @@ Athena is complete when:
 
 ### Existing Infrastructure (Ready)
 - `.sisyphus/` directory structure ✅
-- `background_task` for parallel agents ✅
+- `sisyphus_task` for parallel agent dispatch ✅
 - `background_output` for result collection ✅
-- explore agent for classification ✅
+- `background_cancel` for task cleanup ✅
+- `multimodal-looker` agent for classification ✅
 
 ### Created for Athena
 - `research-librarian` agent ✅
-- Profile persistence system ✅
-- Plan validator with overlap detection ✅
-- Research executor with state management ✅
-- Document generator ✅
-- Profile loader hook ✅
+- Profile classifier (`profile-classifier.ts`) ✅
+- Profile loader hook (`athena-profile-loader`) ✅
+- Phase 1.5 Gap Analysis injection ✅
+
+### Model Dependencies
+- `opencode/glm-4.7-free` - Profile classification and research (free, no auth)
+- `anthropic/claude-sonnet-4-5` - Main Athena agent (requires subscription)

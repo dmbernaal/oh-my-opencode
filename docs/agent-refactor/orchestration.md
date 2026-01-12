@@ -321,6 +321,14 @@ if (planPath) {
 ┌─────────────────────────────────────────────────────────────┐
 │                         Athena (IMPLEMENTED)                 │
 │                                                              │
+│  Profile Classification:                                    │
+│    - Agent: multimodal-looker                               │
+│    - Model: opencode/glm-4.7-free                           │
+│                                                              │
+│  Research Dispatch:                                         │
+│    - Tool: sisyphus_task(subagent_type="research-librarian")│
+│    - Model: opencode/glm-4.7-free                           │
+│                                                              │
 │  Reads:                                                     │
 │    - .sisyphus/session/user-profile.json (via hook)         │
 │    - Existing .sisyphus/research/*.md (if continuing)       │
@@ -399,21 +407,34 @@ export function detectPrometheusHandoff(response: string): HandoffSignal | null;
 **Files**: 
 - `src/agents/athena.ts` - Agent definition and system prompt
 - `src/hooks/athena-profile-loader/index.ts` - Profile injection hook
+- `src/features/athena-research/profile-classifier.ts` - Lightweight classification
 
 **Behavior:**
 
 1. **Profile Loading Hook** runs before Athena sees the message:
    - Checks `.sisyphus/session/user-profile.json` for existing profile (24h TTL)
    - If fresh profile exists: Injects `<user_profile source="cached">` block
-   - If no profile: Spawns lightweight `explore` agent for classification
+   - If no profile: Creates classification session with `multimodal-looker` agent using `opencode/glm-4.7-free` model
    - If classification succeeds: Injects `<user_profile source="auto-classified">` block
    - If classification fails: Injects "[SYSTEM: Classification failed...]" for manual Phase 1
 
-2. **Athena receives augmented message** with profile context
-   - Skips Phase 1 if profile present
-   - Proceeds directly to Phase 2 (Research Planning)
+2. **Phase 1.5 Gap Analysis** (NEW):
+   - Hook also injects "Phase 1.5: Gap Analysis" instructions
+   - Athena MUST ask 1-3 clarifying questions about project gaps (platform, scope, constraints)
+   - Question count adapts to expertise level (beginner=3, intermediate=2, expert=1)
+   - Athena waits for user response before proceeding to Phase 2
 
-3. **Research continuation** is handled naturally by Athena prompt:
+3. **Athena receives augmented message** with profile context + Phase 1.5 instructions
+   - Skips Phase 1 (profile classification) if profile present
+   - Executes Phase 1.5 (gap analysis questions)
+   - Proceeds to Phase 2 (Research Planning) after user answers
+
+4. **Research execution** uses correct tooling:
+   - `sisyphus_task` with `subagent_type="research-librarian"` and `run_in_background=true`
+   - NOT `background_task` (doesn't exist) or `call_omo_agent` (doesn't support research-librarian)
+   - Results collected via `background_output`
+
+5. **Research continuation** is handled naturally by Athena prompt:
    - Can read existing `.sisyphus/research/` documents
    - User can ask to continue or start fresh
 
