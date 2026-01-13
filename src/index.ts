@@ -31,7 +31,9 @@ import {
   createSisyphusOrchestratorHook,
   createPrometheusMdOnlyHook,
   createPrometheusInitHook,
+  createPrometheusResearchLoaderHook,
   createAthenaProfileLoaderHook,
+  createSisyphusPlanLoaderHook,
   createProjectContextEnforcerHook,
   createAutoCodeSimplifierHook,
   createScenarioDetectorHook,
@@ -239,7 +241,11 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
 
   const prometheusInit = createPrometheusInitHook({ directory: ctx.directory });
 
+  const prometheusResearchLoader = createPrometheusResearchLoaderHook({ directory: ctx.directory, client: ctx.client });
+
   const athenaProfileLoader = createAthenaProfileLoaderHook({ directory: ctx.directory, client: ctx.client });
+
+  const sisyphusPlanLoader = createSisyphusPlanLoaderHook({ directory: ctx.directory, client: ctx.client });
 
   const prometheusMdOnly = isHookEnabled("prometheus-md-only")
     ? createPrometheusMdOnlyHook(ctx)
@@ -364,6 +370,8 @@ const OhMyOpenCodePlugin: Plugin = async (ctx) => {
       await keywordDetector?.["chat.message"]?.(input, output);
       await contextInjector["chat.message"]?.(input, output);
       await athenaProfileLoader?.["chat.message"]?.(input, output);
+      await prometheusResearchLoader?.["chat.message"]?.(input, output);
+      await sisyphusPlanLoader?.["chat.message"]?.(input, output);
       await scenarioDetector?.["chat.message"]?.(input, output);
       await intentGate?.["chat.message"]?.(input, output);
       await projectContextEnforcer?.["chat.message"]?.(input, output);

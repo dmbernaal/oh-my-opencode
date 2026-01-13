@@ -37,4 +37,6 @@ export { createVerificationEnforcerHook } from "./verification-enforcer";
 
 
 export { createPrometheusInitHook } from "./prometheus-init";
+export { createPrometheusResearchLoaderHook } from "./prometheus-research-loader";
 export { createAthenaProfileLoaderHook } from "./athena-profile-loader";
+export { createSisyphusPlanLoaderHook } from "./sisyphus-plan-loader";
